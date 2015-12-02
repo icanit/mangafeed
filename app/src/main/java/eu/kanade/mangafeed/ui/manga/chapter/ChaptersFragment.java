@@ -23,6 +23,7 @@ import butterknife.Bind;
 import butterknife.ButterKnife;
 import eu.kanade.mangafeed.R;
 import eu.kanade.mangafeed.data.database.models.Chapter;
+import eu.kanade.mangafeed.data.database.models.Manga;
 import eu.kanade.mangafeed.data.download.DownloadService;
 import eu.kanade.mangafeed.event.DownloadStatusEvent;
 import eu.kanade.mangafeed.ui.base.activity.BaseActivity;
@@ -77,13 +78,16 @@ public class ChaptersFragment extends BaseRxFragment<ChaptersPresenter> implemen
         chapters.setAdapter(adapter);
 
         // Set initial values
-        setReadFilter(getPresenter().getReadFilter());
-        setSortIcon(getPresenter().getSortOrder());
+        setReadFilter();
+        setSortIcon();
 
         // Init listeners
         swipeRefresh.setOnRefreshListener(this::onFetchChapters);
         readCb.setOnCheckedChangeListener((arg, isChecked) -> getPresenter().setReadFilter(isChecked));
-        sortBtn.setOnClickListener(v -> getPresenter().revertSortOrder());
+        sortBtn.setOnClickListener(v -> {
+            getPresenter().revertSortOrder();
+            setSortIcon();
+        });
         nextUnreadBtn.setOnClickListener(v -> {
             Chapter chapter = getPresenter().getNextUnreadChapter();
             if (chapter != null) {
@@ -150,10 +154,15 @@ public class ChaptersFragment extends BaseRxFragment<ChaptersPresenter> implemen
 
     @EventBusHook
     public void onEventMainThread(DownloadStatusEvent event) {
+        Manga manga = getPresenter().getManga();
+        // If the download status is from another manga, don't bother
+        if (manga != null && event.getChapter().manga_id != manga.id)
+            return;
+
         Chapter chapter;
         for (int i = 0; i < adapter.getItemCount(); i++) {
             chapter = adapter.getItem(i);
-            if (event.getChapterId() == chapter.id) {
+            if (event.getChapter().id == chapter.id) {
                 chapter.status = event.getStatus();
                 adapter.notifyItemChanged(i);
                 break;
@@ -273,13 +282,16 @@ public class ChaptersFragment extends BaseRxFragment<ChaptersPresenter> implemen
         actionMode.setTitle(getString(R.string.selected_chapters_title, count));
     }
 
-    public void setSortIcon(boolean aToZ) {
+    public void setSortIcon() {
         if (sortBtn != null) {
+            boolean aToZ = getPresenter().getSortOrder();
             sortBtn.setImageResource(!aToZ ? R.drawable.ic_expand_less_white_36dp : R.drawable.ic_expand_more_white_36dp);
         }
     }
 
-    public void setReadFilter(boolean onlyUnread) {
-        if (readCb != null) readCb.setChecked(onlyUnread);
+    public void setReadFilter() {
+        if (readCb != null) {
+            readCb.setChecked(getPresenter().getReadFilter());
+        }
     }
 }

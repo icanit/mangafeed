@@ -10,7 +10,7 @@ import eu.kanade.mangafeed.util.UrlUtil;
 public class Manga {
 
     @StorIOSQLiteColumn(name = MangaTable.COLUMN_ID, key = true)
-    public Long id;
+    public long id;
 
     @StorIOSQLiteColumn(name = MangaTable.COLUMN_SOURCE)
     public int source;
@@ -51,8 +51,8 @@ public class Manga {
     @StorIOSQLiteColumn(name = MangaTable.COLUMN_VIEWER)
     public int viewer;
 
-    @StorIOSQLiteColumn(name = MangaTable.COLUMN_CHAPTER_ORDER)
-    public int chapter_order;
+    @StorIOSQLiteColumn(name = MangaTable.COLUMN_CHAPTER_FLAGS)
+    public int chapter_flags;
 
     public int unread;
 

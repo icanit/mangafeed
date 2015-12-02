@@ -35,7 +35,6 @@ public class Download {
         this.source = source;
         this.manga = manga;
         this.chapter = chapter;
-        this.status = QUEUE;
     }
 
     public int getStatus() {
@@ -54,6 +53,6 @@ public class Download {
     private void notifyStatus() {
         if (statusSubject != null)
             statusSubject.onNext(this);
-        EventBus.getDefault().post(new DownloadStatusEvent(chapter.id, status));
+        EventBus.getDefault().post(new DownloadStatusEvent(chapter, status));
     }
 }

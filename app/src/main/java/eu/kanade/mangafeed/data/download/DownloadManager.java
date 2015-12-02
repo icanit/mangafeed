@@ -133,7 +133,7 @@ public class DownloadManager {
     private boolean prepareDownload(Download download) {
         // If the chapter is already queued, don't add it again
         for (Download queuedDownload : queue.get()) {
-            if (download.chapter.id.equals(queuedDownload.chapter.id))
+            if (download.chapter.id == queuedDownload.chapter.id)
                 return true;
         }
 
@@ -340,6 +340,7 @@ public class DownloadManager {
     public void deleteChapter(Source source, Manga manga, Chapter chapter) {
         File path = getAbsoluteChapterDirectory(source, manga, chapter);
         DiskUtils.deleteFiles(path);
+        queue.remove(chapter);
     }
 
     public DownloadQueue getQueue() {
