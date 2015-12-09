@@ -8,6 +8,7 @@ import com.squareup.okhttp.Response;
 
 import org.jsoup.Jsoup;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +98,12 @@ public abstract class Source extends BaseSource {
                 });
     }
 
+    public Observable<Page> getAllImageUrlsFromPageList(final List<Page> pages) {
+        return Observable.from(pages)
+                .filter(page -> page.getImageUrl() != null)
+                .mergeWith(getRemainingImageUrlsFromPageList(pages));
+    }
+
     // Get the URLs of the images of a chapter
     public Observable<Page> getRemainingImageUrlsFromPageList(final List<Page> pages) {
         return Observable.from(pages)
@@ -147,8 +154,10 @@ public abstract class Source extends BaseSource {
         page.setStatus(Page.DOWNLOAD_IMAGE);
         return getImageProgressResponse(page)
                 .flatMap(resp -> {
-                    if (!cacheManager.putImageToDiskCache(page.getImageUrl(), resp)) {
-                        throw new IllegalStateException("Unable to save image");
+                    try {
+                        cacheManager.putImageToDiskCache(page.getImageUrl(), resp);
+                    } catch (IOException e) {
+                        return Observable.error(e);
                     }
                     return Observable.just(page);
                 });

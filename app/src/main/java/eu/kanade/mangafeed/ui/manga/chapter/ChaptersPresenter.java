@@ -25,6 +25,7 @@ import rx.Observable;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.schedulers.Schedulers;
 import rx.subjects.PublishSubject;
+import timber.log.Timber;
 
 public class ChaptersPresenter extends BasePresenter<ChaptersFragment> {
 
@@ -36,15 +37,16 @@ public class ChaptersPresenter extends BasePresenter<ChaptersFragment> {
     private Manga manga;
     private Source source;
     private List<Chapter> chapters;
-    private boolean isCatalogueManga;
     private boolean sortOrderAToZ = true;
     private boolean onlyUnread = true;
     private boolean onlyDownloaded;
+    private boolean hasRequested;
 
     private PublishSubject<List<Chapter>> chaptersSubject;
 
     private static final int DB_CHAPTERS = 1;
     private static final int FETCH_CHAPTERS = 2;
+    private static final int CHAPTER_STATUS_CHANGES = 3;
 
     @Override
     protected void onCreate(Bundle savedState) {
@@ -54,37 +56,33 @@ public class ChaptersPresenter extends BasePresenter<ChaptersFragment> {
 
         restartableLatestCache(DB_CHAPTERS,
                 this::getDbChaptersObs,
-                ChaptersFragment::onNextChapters
-        );
+                ChaptersFragment::onNextChapters);
 
-        restartableLatestCache(FETCH_CHAPTERS,
+        restartableFirst(FETCH_CHAPTERS,
                 this::getOnlineChaptersObs,
-                (view, result) -> view.onFetchChaptersFinish()
-        );
-    }
+                (view, result) -> view.onFetchChaptersDone(),
+                (view, error) -> view.onFetchChaptersError());
 
-    @Override
-    protected void onTakeView(ChaptersFragment view) {
-        super.onTakeView(view);
+        restartableLatestCache(CHAPTER_STATUS_CHANGES,
+                this::getChapterStatusObs,
+                (view, download) -> view.onChapterStatusChange(download.chapter),
+                (view, error) -> Timber.e(error.getCause(), error.getMessage()));
+
         registerForStickyEvents();
     }
 
     @Override
-    protected void onDropView() {
-        unregisterForEvents();
-        super.onDropView();
-    }
-
-    @Override
     protected void onDestroy() {
-        super.onDestroy();
+        unregisterForEvents();
         EventBus.getDefault().removeStickyEvent(ChapterCountEvent.class);
+        super.onDestroy();
     }
 
     @EventBusHook
     public void onEventMainThread(Manga manga) {
-        if (this.manga == null) {
-            this.manga = manga;
+        this.manga = manga;
+
+        if (!isStarted(DB_CHAPTERS)) {
             source = sourceManager.get(manga.source);
             start(DB_CHAPTERS);
 
@@ -93,18 +91,22 @@ public class ChaptersPresenter extends BasePresenter<ChaptersFragment> {
                     .doOnNext(chapters -> {
                         this.chapters = chapters;
                         EventBus.getDefault().postSticky(new ChapterCountEvent(chapters.size()));
+                        for (Chapter chapter : chapters) {
+                            setChapterStatus(chapter);
+                        }
+                        start(CHAPTER_STATUS_CHANGES);
                     })
                     .subscribe(chaptersSubject::onNext));
-
-            // Get chapters if it's an online source
-            if (isCatalogueManga) {
-                fetchChapters();
-            }
         }
     }
 
-    public void fetchChapters() {
+    public void fetchChaptersFromSource() {
+        hasRequested = true;
         start(FETCH_CHAPTERS);
+    }
+
+    private void refreshChapters() {
+        chaptersSubject.onNext(chapters);
     }
 
     private Observable<PostResult> getOnlineChaptersObs() {
@@ -127,18 +129,12 @@ public class ChaptersPresenter extends BasePresenter<ChaptersFragment> {
         if (onlyUnread) {
             observable = observable.filter(chapter -> !chapter.read);
         }
-
-        observable = observable.doOnNext(this::setChapterStatus);
         if (onlyDownloaded) {
             observable = observable.filter(chapter -> chapter.status == Download.DOWNLOADED);
         }
-        return observable.toSortedList((chapter, chapter2) -> {
-            if (sortOrderAToZ) {
-                return Float.compare(chapter.chapter_number, chapter2.chapter_number);
-            } else {
-                return Float.compare(chapter2.chapter_number, chapter.chapter_number);
-            }
-        });
+        return observable.toSortedList((chapter, chapter2) -> sortOrderAToZ ?
+                Float.compare(chapter2.chapter_number, chapter.chapter_number) :
+                Float.compare(chapter.chapter_number, chapter2.chapter_number));
     }
 
     private void setChapterStatus(Chapter chapter) {
@@ -154,6 +150,30 @@ public class ChaptersPresenter extends BasePresenter<ChaptersFragment> {
         } else {
             chapter.status = Download.NOT_DOWNLOADED;
         }
+    }
+
+    private Observable<Download> getChapterStatusObs() {
+        return downloadManager.getQueue().getStatusObservable()
+                .observeOn(AndroidSchedulers.mainThread())
+                .filter(download -> download.manga.id.equals(manga.id))
+                .doOnNext(this::updateChapterStatus);
+    }
+
+    public void updateChapterStatus(Download download) {
+        for (Chapter chapter : chapters) {
+            if (download.chapter.id.equals(chapter.id)) {
+                chapter.status = download.getStatus();
+                break;
+            }
+        }
+        if (onlyDownloaded && download.getStatus() == Download.DOWNLOADED)
+            refreshChapters();
+    }
+
+    public Observable<Download> getDownloadProgressObs() {
+        return downloadManager.getQueue().getProgressObservable()
+                .filter(download -> download.manga.id.equals(manga.id))
+                .observeOn(AndroidSchedulers.mainThread());
     }
 
     public void onOpenChapter(Chapter chapter) {
@@ -190,30 +210,34 @@ public class ChaptersPresenter extends BasePresenter<ChaptersFragment> {
     public void deleteChapters(Observable<Chapter> selectedChapters) {
         add(selectedChapters
                 .subscribe(chapter -> {
-                    downloadManager.deleteChapter(source, manga, chapter);
-                    chapter.status = Download.NOT_DOWNLOADED;
+                    downloadManager.getQueue().remove(chapter);
+                }, error -> {
+                    Timber.e(error.getMessage());
+                }, () -> {
+                    if (onlyDownloaded)
+                        refreshChapters();
                 }));
+    }
+
+    public void deleteChapter(Chapter chapter) {
+        downloadManager.deleteChapter(source, manga, chapter);
     }
 
     public void revertSortOrder() {
         //TODO manga.chapter_order
         sortOrderAToZ = !sortOrderAToZ;
-        chaptersSubject.onNext(chapters);
+        refreshChapters();
     }
 
     public void setReadFilter(boolean onlyUnread) {
         //TODO do we need save filter for manga?
         this.onlyUnread = onlyUnread;
-        chaptersSubject.onNext(chapters);
+        refreshChapters();
     }
 
     public void setDownloadedFilter(boolean onlyDownloaded) {
         this.onlyDownloaded = onlyDownloaded;
-        chaptersSubject.onNext(chapters);
-    }
-
-    public void setIsCatalogueManga(boolean value) {
-        isCatalogueManga = value;
+        refreshChapters();
     }
 
     public boolean getSortOrder() {
@@ -230,6 +254,14 @@ public class ChaptersPresenter extends BasePresenter<ChaptersFragment> {
 
     public Manga getManga() {
         return manga;
+    }
+
+    public List<Chapter> getChapters() {
+        return chapters;
+    }
+
+    public boolean hasRequested() {
+        return hasRequested;
     }
 
 }

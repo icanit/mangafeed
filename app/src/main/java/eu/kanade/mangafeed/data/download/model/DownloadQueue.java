@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import eu.kanade.mangafeed.data.database.models.Chapter;
+import eu.kanade.mangafeed.data.source.model.Page;
 import rx.Observable;
 import rx.subjects.PublishSubject;
 
@@ -25,7 +26,6 @@ public class DownloadQueue {
 
     public void remove(Download download) {
         queue.remove(download);
-        download.setStatus(Download.NOT_DOWNLOADED);
         download.setStatusSubject(null);
     }
 
@@ -56,8 +56,36 @@ public class DownloadQueue {
     }
 
     public Observable<Download> getStatusObservable() {
+        return statusSubject;
+    }
+
+    public Observable<Download> getProgressObservable() {
         return statusSubject
-                .startWith(getActiveDownloads());
+                .startWith(getActiveDownloads())
+                .flatMap(download -> {
+                    if (download.getStatus() == Download.DOWNLOADING) {
+                        PublishSubject<Integer> pageStatusSubject = PublishSubject.create();
+                        setPagesSubject(download.pages, pageStatusSubject);
+                        return pageStatusSubject
+                                .filter(status -> status == Page.READY)
+                                .map(status -> download);
+
+                    } else if (download.getStatus() == Download.DOWNLOADED ||
+                            download.getStatus() == Download.ERROR) {
+
+                        setPagesSubject(download.pages, null);
+                    }
+                    return Observable.just(download);
+                })
+                .filter(download -> download.getStatus() == Download.DOWNLOADING);
+    }
+
+    private void setPagesSubject(List<Page> pages, PublishSubject<Integer> subject) {
+        if (pages != null) {
+            for (Page page : pages) {
+                page.setStatusSubject(subject);
+            }
+        }
     }
 
 }

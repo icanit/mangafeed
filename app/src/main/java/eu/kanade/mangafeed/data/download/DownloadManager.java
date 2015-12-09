@@ -12,8 +12,6 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Type;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.List;
 
 import eu.kanade.mangafeed.data.database.models.Chapter;
@@ -81,11 +79,12 @@ public class DownloadManager {
                 .lift(new DynamicConcurrentMergeOperator<>(this::downloadChapter, threadsNumber))
                 .onBackpressureBuffer()
                 .observeOn(AndroidSchedulers.mainThread())
+                .map(download -> areAllDownloadsFinished())
                 .subscribe(finished -> {
                     if (finished) {
                         DownloadService.stop(context);
                     }
-                }, e -> Timber.e(e.fillInStackTrace(), e.getMessage()));
+                }, e -> Timber.e(e.getCause(), e.getMessage()));
 
         isRunning = true;
     }
@@ -164,11 +163,11 @@ public class DownloadManager {
     }
 
     // Download the entire chapter
-    private Observable<Boolean> downloadChapter(Download download) {
+    private Observable<Download> downloadChapter(Download download) {
         try {
             DiskUtils.createDirectory(download.directory);
         } catch (IOException e) {
-            Timber.e(e.getMessage());
+            return Observable.error(e);
         }
 
         Observable<List<Page>> pageListObservable = download.pages == null ?
@@ -182,73 +181,95 @@ public class DownloadManager {
 
         return pageListObservable
                 .subscribeOn(Schedulers.io())
-                .doOnNext(pages -> download.downloadedImages = 0)
-                .doOnNext(pages -> download.setStatus(Download.DOWNLOADING))
+                .doOnNext(pages -> {
+                    download.downloadedImages = 0;
+                    download.setStatus(Download.DOWNLOADING);
+                })
                 // Get all the URLs to the source images, fetch pages if necessary
-                .flatMap(pageList -> Observable.from(pageList)
-                        .filter(page -> page.getImageUrl() != null)
-                        .mergeWith(download.source.getRemainingImageUrlsFromPageList(pageList)))
+                .flatMap(download.source::getAllImageUrlsFromPageList)
                 // Start downloading images, consider we can have downloaded images already
-                .concatMap(page -> getDownloadedImage(page, download.source, download.directory))
-                .doOnNext(p -> download.downloadedImages++)
+                .concatMap(page -> getOrDownloadImage(page, download))
                 // Do after download completes
                 .doOnCompleted(() -> onDownloadCompleted(download))
                 .toList()
-                .flatMap(pages -> Observable.just(areAllDownloadsFinished()));
+                .map(pages -> download)
+                // If the page list threw, it will resume here
+                .onErrorResumeNext(error -> {
+                    download.setStatus(Download.ERROR);
+                    return Observable.just(download);
+                });
     }
 
-    // Get downloaded image if exists, otherwise download it with the method below
-    public Observable<Page> getDownloadedImage(final Page page, Source source, File chapterDir) {
-        Observable<Page> pageObservable = Observable.just(page);
+    // Get the image from the filesystem if it exists or download from network
+    private Observable<Page> getOrDownloadImage(final Page page, Download download) {
+        // If the image URL is empty, do nothing
         if (page.getImageUrl() == null)
-            return pageObservable;
+            return Observable.just(page);
 
-        String imageFilename = getImageFilename(page);
-        File imagePath = new File(chapterDir, imageFilename);
+        String filename = getImageFilename(page);
+        File imagePath = new File(download.directory, filename);
 
-        if (!isImageDownloaded(imagePath)) {
-            page.setStatus(Page.DOWNLOAD_IMAGE);
-            pageObservable = downloadImage(page, source, chapterDir, imageFilename);
-        }
+        // If the image is already downloaded, do nothing. Otherwise download from network
+        Observable<Page> pageObservable = isImageDownloaded(imagePath) ?
+                Observable.just(page) :
+                downloadImage(page, download.source, download.directory, filename);
 
         return pageObservable
                 // When the image is ready, set image path, progress (just in case) and status
                 .doOnNext(p -> {
-                    p.setImagePath(imagePath.getAbsolutePath());
-                    p.setProgress(100);
-                    p.setStatus(Page.READY);
+                    page.setImagePath(imagePath.getAbsolutePath());
+                    page.setProgress(100);
+                    download.downloadedImages++;
+                    page.setStatus(Page.READY);
                 })
-                // If the download fails, mark this page as error
-                .doOnError(e -> page.setStatus(Page.ERROR))
-                // Allow to download the remaining images
-                .onErrorResumeNext(e -> Observable.just(page));
-    }
-
-    // Download the image and save it to the filesystem
-    private Observable<Page> downloadImage(final Page page, Source source, File chapterDir, String imageFilename) {
-        return source.getImageProgressResponse(page)
-                .flatMap(resp -> {
-                    try {
-                        DiskUtils.saveBufferedSourceToDirectory(resp.body().source(), chapterDir, imageFilename);
-                    } catch (IOException e) {
-                        Timber.e(e.fillInStackTrace(), e.getMessage());
-                        throw new IllegalStateException("Unable to save image");
-                    }
+                // Mark this page as error and allow to download the remaining
+                .onErrorResumeNext(e -> {
+                    page.setProgress(0);
+                    page.setStatus(Page.ERROR);
                     return Observable.just(page);
                 });
     }
 
+    // Save image on disk
+    private Observable<Page> downloadImage(Page page, Source source, File directory, String filename) {
+        page.setStatus(Page.DOWNLOAD_IMAGE);
+        return source.getImageProgressResponse(page)
+                .flatMap(resp -> {
+                    try {
+                        DiskUtils.saveBufferedSourceToDirectory(resp.body().source(), directory, filename);
+                    } catch (Exception e) {
+                        Timber.e(e.getCause(), e.getMessage());
+                        return Observable.error(e);
+                    }
+                    return Observable.just(page);
+                })
+                .retry(2);
+    }
+
+    // Public method to get the image from the filesystem. It does NOT provide any way to download the image
+    public Observable<Page> getDownloadedImage(final Page page, File chapterDir) {
+        if (page.getImageUrl() == null) {
+            page.setStatus(Page.ERROR);
+            return Observable.just(page);
+        }
+
+        File imagePath = new File(chapterDir, getImageFilename(page));
+
+        // When the image is ready, set image path, progress (just in case) and status
+        if (isImageDownloaded(imagePath)) {
+            page.setImagePath(imagePath.getAbsolutePath());
+            page.setProgress(100);
+            page.setStatus(Page.READY);
+        } else {
+            page.setStatus(Page.ERROR);
+        }
+        return Observable.just(page);
+    }
+
     // Get the filename for an image given the page
     private String getImageFilename(Page page) {
-        String url;
-        try {
-            url = new URL(page.getImageUrl()).getPath();
-        } catch (MalformedURLException e) {
-            url = page.getImageUrl();
-        }
-        return url.substring(
-                url.lastIndexOf("/") + 1,
-                url.length());
+        String url = page.getImageUrl();
+        return url.substring(url.lastIndexOf("/") + 1, url.length());
     }
 
     private boolean isImageDownloaded(File imagePath) {
@@ -267,7 +288,11 @@ public class DownloadManager {
         // If any page has an error, the download result will be error
         for (Page page : download.pages) {
             actualProgress += page.getProgress();
-            if (page.getStatus() == Page.ERROR) status = Download.ERROR;
+            if (page.getStatus() != Page.READY) status = Download.ERROR;
+        }
+        // Ensure that the chapter folder has all the images
+        if (!isChapterDownloaded(download.directory, download.pages)) {
+            status = Download.ERROR;
         }
         download.totalProgress = actualProgress;
         download.setStatus(status);
@@ -287,7 +312,7 @@ public class DownloadManager {
                 pages = gson.fromJson(reader, collectionType);
             }
         } catch (FileNotFoundException e) {
-            Timber.e(e.fillInStackTrace(), e.getMessage());
+            Timber.e(e.getCause(), e.getMessage());
         } finally {
             if (reader != null) try { reader.close(); } catch (IOException e) { /* Do nothing */ }
         }
@@ -310,7 +335,7 @@ public class DownloadManager {
             out.write(gson.toJson(pages).getBytes());
             out.flush();
         } catch (IOException e) {
-            Timber.e(e.fillInStackTrace(), e.getMessage());
+            Timber.e(e.getCause(), e.getMessage());
         } finally {
             if (out != null) try { out.close(); } catch (IOException e) { /* Do nothing */ }
         }
@@ -340,7 +365,6 @@ public class DownloadManager {
     public void deleteChapter(Source source, Manga manga, Chapter chapter) {
         File path = getAbsoluteChapterDirectory(source, manga, chapter);
         DiskUtils.deleteFiles(path);
-        queue.remove(chapter);
     }
 
     public DownloadQueue getQueue() {
@@ -371,7 +395,7 @@ public class DownloadManager {
 
         for (Download download : queue.get()) {
             if (download.getStatus() != Download.DOWNLOADED) {
-                download.setStatus(Download.QUEUE);
+                if (download.getStatus() != Download.QUEUE) download.setStatus(Download.QUEUE);
                 if (!hasPendingDownloads) hasPendingDownloads = true;
                 downloadsQueueSubject.onNext(download);
             }
