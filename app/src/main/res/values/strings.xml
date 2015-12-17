@@ -39,6 +39,7 @@
     <string name="pref_category_accounts">Accounts</string>
     <string name="pref_category_downloads">Downloads</string>
     <string name="pref_category_cache">Cache</string>
+    <string name="pref_category_about">About</string>
 
       <!-- Reader section -->
     <string name="pref_hide_status_bar">Hide status bar</string>
@@ -46,6 +47,9 @@
     <string name="pref_enable_transitions">Enable transitions</string>
     <string name="pref_show_page_number">Show page number</string>
     <string name="pref_custom_brightness">Use custom brightness</string>
+    <string name="pref_reader_theme">Reader theme</string>
+    <string name="white_theme">White</string>
+    <string name="black_theme">Black</string>
     <string name="pref_viewer_type">Default viewer</string>
     <string name="default_viewer">Default</string>
     <string name="left_to_right_viewer">Left to right</string>
@@ -55,7 +59,7 @@
 
       <!-- Downloads section -->
     <string name="pref_download_directory">Downloads directory</string>
-    <string name="pref_download_threads">Download threads</string>
+    <string name="pref_download_slots">Simultaneous downloads</string>
 
       <!-- Cache section -->
     <string name="pref_chapter_cache_size">Chapters cache size</string>
@@ -63,6 +67,10 @@
     <string name="used_cache">Used: %1$s</string>
     <string name="cache_deleted">Cache cleared. %1$d files have been deleted</string>
     <string name="cache_delete_error">An error occurred clearing cache</string>
+
+      <!-- About section -->
+    <string name="version">Version</string>
+    <string name="build_time">Build time</string>
 
     <!-- ACRA -->
     <string name="pref_enable_acra">Send crash reports</string>
@@ -85,6 +93,7 @@
 
     <!-- Catalogue fragment -->
     <string name="source_requires_login">This source requires login</string>
+    <string name="select_source">Select a source</string>
 
     <!-- Manga info fragment -->
     <string name="manga_detail_tab">Info</string>

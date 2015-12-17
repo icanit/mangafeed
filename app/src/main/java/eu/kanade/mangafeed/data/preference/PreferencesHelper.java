@@ -11,7 +11,7 @@ import com.f2prateek.rx.preferences.RxSharedPreferences;
 import java.io.File;
 
 import eu.kanade.mangafeed.R;
-import eu.kanade.mangafeed.data.chaptersync.BaseChapterSync;
+import eu.kanade.mangafeed.data.mangasync.base.MangaSyncService;
 import eu.kanade.mangafeed.data.source.base.Source;
 import rx.Observable;
 
@@ -23,8 +23,8 @@ public class PreferencesHelper {
 
     private static final String SOURCE_ACCOUNT_USERNAME = "pref_source_username_";
     private static final String SOURCE_ACCOUNT_PASSWORD = "pref_source_password_";
-    private static final String CHAPTERSYNC_ACCOUNT_USERNAME = "pref_chaptersync_username_";
-    private static final String CHAPTERSYNC_ACCOUNT_PASSWORD = "pref_chaptersync_password_";
+    private static final String MANGASYNC_ACCOUNT_USERNAME = "pref_mangasync_username_";
+    private static final String MANGASYNC_ACCOUNT_PASSWORD = "pref_mangasync_password_";
 
     private File defaultDownloadsDir;
 
@@ -83,37 +83,41 @@ public class PreferencesHelper {
         return rxPrefs.getFloat(getKey(R.string.pref_custom_brightness_value_key), 0F);
     }
 
+    public int getReaderTheme() {
+        return prefs.getInt(getKey(R.string.pref_reader_theme_key), 0);
+    }
+
     public int getDefaultViewer() {
         return Integer.parseInt(prefs.getString(getKey(R.string.pref_default_viewer_key), "1"));
     }
 
     public String getSourceUsername(Source source) {
-        return prefs.getString(SOURCE_ACCOUNT_USERNAME + source.getSourceId(), "");
+        return prefs.getString(SOURCE_ACCOUNT_USERNAME + source.getId(), "");
     }
 
     public String getSourcePassword(Source source) {
-        return prefs.getString(SOURCE_ACCOUNT_PASSWORD + source.getSourceId(), "");
+        return prefs.getString(SOURCE_ACCOUNT_PASSWORD + source.getId(), "");
     }
 
     public void setSourceCredentials(Source source, String username, String password) {
         prefs.edit()
-                .putString(SOURCE_ACCOUNT_USERNAME + source.getSourceId(), username)
-                .putString(SOURCE_ACCOUNT_PASSWORD + source.getSourceId(), password)
+                .putString(SOURCE_ACCOUNT_USERNAME + source.getId(), username)
+                .putString(SOURCE_ACCOUNT_PASSWORD + source.getId(), password)
                 .apply();
     }
 
-    public String getChapterSyncUsername(BaseChapterSync sync) {
-        return prefs.getString(CHAPTERSYNC_ACCOUNT_USERNAME + sync.getId(), "");
+    public String getMangaSyncUsername(MangaSyncService sync) {
+        return prefs.getString(MANGASYNC_ACCOUNT_USERNAME + sync.getId(), "");
     }
 
-    public String getChapterSyncPassword(BaseChapterSync sync) {
-        return prefs.getString(CHAPTERSYNC_ACCOUNT_PASSWORD + sync.getId(), "");
+    public String getMangaSyncPassword(MangaSyncService sync) {
+        return prefs.getString(MANGASYNC_ACCOUNT_PASSWORD + sync.getId(), "");
     }
 
-    public void setChapterSyncCredentials(BaseChapterSync sync, String username, String password) {
+    public void setMangaSyncCredentials(MangaSyncService sync, String username, String password) {
         prefs.edit()
-                .putString(CHAPTERSYNC_ACCOUNT_USERNAME + sync.getId(), username)
-                .putString(CHAPTERSYNC_ACCOUNT_PASSWORD + sync.getId(), password)
+                .putString(MANGASYNC_ACCOUNT_USERNAME + sync.getId(), username)
+                .putString(MANGASYNC_ACCOUNT_PASSWORD + sync.getId(), password)
                 .apply();
     }
 
@@ -127,12 +131,11 @@ public class PreferencesHelper {
     }
 
     public int getDownloadThreads() {
-        return Integer.parseInt(prefs.getString(getKey(R.string.pref_download_threads_key), "1"));
+        return prefs.getInt(getKey(R.string.pref_download_slots_key), 1);
     }
 
     public Observable<Integer> getDownloadTheadsObservable() {
-        return rxPrefs.getString(getKey(R.string.pref_download_threads_key), "1")
-                .asObservable().map(Integer::parseInt);
+        return rxPrefs.getInteger(getKey(R.string.pref_download_slots_key), 1).asObservable();
     }
 
 }

@@ -8,25 +8,22 @@ import java.util.List;
 import javax.inject.Inject;
 
 import de.greenrobot.event.EventBus;
-import eu.kanade.mangafeed.data.chaptersync.ChapterSyncManager;
-import eu.kanade.mangafeed.data.chaptersync.MyAnimeList;
-import eu.kanade.mangafeed.data.chaptersync.UpdateChapterSyncService;
 import eu.kanade.mangafeed.data.database.DatabaseHelper;
 import eu.kanade.mangafeed.data.database.models.Chapter;
-import eu.kanade.mangafeed.data.database.models.ChapterSync;
 import eu.kanade.mangafeed.data.database.models.Manga;
 import eu.kanade.mangafeed.data.download.DownloadManager;
+import eu.kanade.mangafeed.data.mangasync.MangaSyncManager;
+import eu.kanade.mangafeed.data.mangasync.base.MangaSyncService;
 import eu.kanade.mangafeed.data.preference.PreferencesHelper;
 import eu.kanade.mangafeed.data.source.SourceManager;
 import eu.kanade.mangafeed.data.source.base.Source;
 import eu.kanade.mangafeed.data.source.model.Page;
+import eu.kanade.mangafeed.data.sync.UpdateMangaSyncService;
 import eu.kanade.mangafeed.event.ReaderEvent;
-import eu.kanade.mangafeed.event.UpdateChapterSyncEvent;
 import eu.kanade.mangafeed.ui.base.presenter.BasePresenter;
 import eu.kanade.mangafeed.util.EventBusHook;
 import icepick.State;
 import rx.Observable;
-import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.schedulers.Schedulers;
 import rx.subjects.PublishSubject;
@@ -37,7 +34,7 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
     @Inject PreferencesHelper prefs;
     @Inject DatabaseHelper db;
     @Inject DownloadManager downloadManager;
-    @Inject ChapterSyncManager syncManager;
+    @Inject MangaSyncManager syncManager;
     @Inject SourceManager sourceManager;
 
     @State Manga manga;
@@ -52,9 +49,6 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
     private List<Page> nextChapterPageList;
 
     private PublishSubject<Page> retryPageSubject;
-
-    private Subscription nextChapterSubscription;
-    private Subscription previousChapterSubscription;
 
     private static final int GET_PAGE_LIST = 1;
     private static final int GET_PAGE_IMAGES = 2;
@@ -110,6 +104,9 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
     @Override
     protected void onDestroy() {
         unregisterForEvents();
+        if (pageList != null && isChapterFinished()) {
+            updateMangaSyncLastChapterRead();
+        }
         onChapterLeft();
         super.onDestroy();
     }
@@ -128,7 +125,7 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
         EventBus.getDefault().removeStickyEvent(event);
         manga = event.getManga();
         source = event.getSource();
-        sourceId = source.getSourceId();
+        sourceId = source.getId();
         loadChapter(event.getChapter());
     }
 
@@ -231,13 +228,11 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
             source.savePageList(chapter.url, pageList);
 
         // Save current progress of the chapter. Mark as read if the chapter is finished
-        // and update progress in remote services (like MyAnimeList)
         chapter.last_page_read = currentPage;
         if (isChapterFinished()) {
             chapter.read = true;
-            updateChapterSyncLastChapterRead();
         }
-        db.insertChapter(chapter).executeAsBlocking();
+        db.insertChapter(chapter).createObservable().subscribe();
     }
 
     // Check whether the chapter has been read
@@ -245,27 +240,24 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
         return !chapter.read && currentPage == pageList.size() - 1;
     }
 
-    private void updateChapterSyncLastChapterRead() {
-        // TODO don't use MAL methods for possible alternatives to MAL
-        MyAnimeList mal = syncManager.getMyAnimeList();
+    private void updateMangaSyncLastChapterRead() {
+        db.getMangaSync(manga).createObservable()
+                .take(1)
+                .flatMap(Observable::from)
+                .doOnNext(mangaSync -> {
+                    MangaSyncService service = syncManager.getSyncService(mangaSync.sync_id);
+                    if (!service.isLogged())
+                        return;
 
-        if (!mal.isLogged())
-            return;
+                    int lastChapterReadLocal = (int) Math.floor(chapter.chapter_number);
+                    int lastChapterReadRemote = mangaSync.last_chapter_read;
 
-        List<ChapterSync> result = db.getChapterSync(manga, mal).executeAsBlocking();
-        if (result.isEmpty())
-            return;
-
-        ChapterSync chapterSync = result.get(0);
-
-        int lastChapterReadLocal = (int) Math.floor(chapter.chapter_number);
-        int lastChapterReadRemote = chapterSync.last_chapter_read;
-
-        if (lastChapterReadLocal > lastChapterReadRemote) {
-            chapterSync.last_chapter_read = lastChapterReadLocal;
-            EventBus.getDefault().postSticky(new UpdateChapterSyncEvent(chapterSync));
-            UpdateChapterSyncService.start(getContext());
-        }
+                    if (lastChapterReadLocal > lastChapterReadRemote) {
+                        mangaSync.last_chapter_read = lastChapterReadLocal;
+                        UpdateMangaSyncService.start(getContext(), mangaSync);
+                    }
+                })
+                .subscribe();
     }
 
     public void setCurrentPage(int currentPage) {
@@ -273,20 +265,14 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
     }
 
     private void getAdjacentChapters() {
-        if (nextChapterSubscription != null)
-            remove(nextChapterSubscription);
-
-        add(nextChapterSubscription = db.getNextChapter(chapter).createObservable()
+        add(db.getNextChapter(chapter).createObservable()
+                .take(1)
                 .flatMap(Observable::from)
-                .subscribeOn(Schedulers.io())
                 .subscribe(result -> nextChapter = result));
 
-        if (previousChapterSubscription != null)
-            remove(previousChapterSubscription);
-
-        add(previousChapterSubscription = db.getPreviousChapter(chapter).createObservable()
+        add(db.getPreviousChapter(chapter).createObservable()
+                .take(1)
                 .flatMap(Observable::from)
-                .subscribeOn(Schedulers.io())
                 .subscribe(result -> previousChapter = result));
     }
 

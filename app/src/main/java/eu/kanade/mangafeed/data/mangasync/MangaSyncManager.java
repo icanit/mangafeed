@@ -1,18 +1,21 @@
-package eu.kanade.mangafeed.data.chaptersync;
+package eu.kanade.mangafeed.data.mangasync;
 
 import android.content.Context;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class ChapterSyncManager {
+import eu.kanade.mangafeed.data.mangasync.base.MangaSyncService;
+import eu.kanade.mangafeed.data.mangasync.services.MyAnimeList;
 
-    private List<BaseChapterSync> services;
+public class MangaSyncManager {
+
+    private List<MangaSyncService> services;
     private MyAnimeList myAnimeList;
 
     public static final int MYANIMELIST = 1;
 
-    public ChapterSyncManager(Context context) {
+    public MangaSyncManager(Context context) {
         services = new ArrayList<>();
         myAnimeList = new MyAnimeList(context);
         services.add(myAnimeList);
@@ -22,11 +25,11 @@ public class ChapterSyncManager {
         return myAnimeList;
     }
 
-    public List<BaseChapterSync> getChapterSyncServices() {
+    public List<MangaSyncService> getSyncServices() {
         return services;
     }
 
-    public BaseChapterSync getSyncService(int id) {
+    public MangaSyncService getSyncService(int id) {
         switch (id) {
             case MYANIMELIST:
                 return myAnimeList;
