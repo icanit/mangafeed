@@ -1,6 +1,7 @@
 package eu.kanade.mangafeed.ui.reader;
 
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 
 import java.io.File;
 import java.util.List;
@@ -65,6 +66,22 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
 
         retryPageSubject = PublishSubject.create();
 
+        restartableLatestCache(PRELOAD_NEXT_CHAPTER,
+                this::getPreloadNextChapterObservable,
+                (view, pages) -> {},
+                (view, error) -> Timber.e("An error occurred while preloading a chapter"));
+
+        restartableReplay(GET_PAGE_IMAGES,
+                () -> getPageImagesObservable()
+                        .doOnCompleted(this::preloadNextChapter),
+                (view, page) -> {},
+                (view, error) -> Timber.e("An error occurred while downloading an image"));
+
+        restartableLatestCache(RETRY_IMAGES,
+                this::getRetryPageObservable,
+                (view, page) -> {},
+                (view, error) -> Timber.e("An error occurred while downloading an image"));
+
         restartableLatestCache(GET_PAGE_LIST,
                 () -> getPageListObservable()
                         .doOnNext(pages -> pageList = pages)
@@ -78,25 +95,7 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
                     if (currentPage != 0)
                         view.setSelectedPage(currentPage);
                 },
-                (view, error) -> {
-                    view.onChapterError();
-                });
-
-        restartableReplay(GET_PAGE_IMAGES,
-                () -> getPageImagesObservable()
-                        .doOnCompleted(this::preloadNextChapter),
-                (view, page) -> {},
-                (view, error) -> Timber.e("An error occurred while downloading an image"));
-
-        restartableLatestCache(RETRY_IMAGES,
-                this::getRetryPageObservable,
-                (view, page) -> {},
-                (view, error) -> Timber.e("An error occurred while downloading an image"));
-
-        restartableLatestCache(PRELOAD_NEXT_CHAPTER,
-                this::getPreloadNextChapterObservable,
-                (view, pages) -> {},
-                (view, error) -> Timber.e("An error occurred while preloading a chapter"));
+                (view, error) -> view.onChapterError());
 
         registerForStickyEvents();
     }
@@ -104,11 +103,17 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
     @Override
     protected void onDestroy() {
         unregisterForEvents();
-        if (pageList != null && isChapterFinished()) {
-            updateMangaSyncLastChapterRead();
-        }
         onChapterLeft();
+        updateMangaSyncLastChapterRead();
         super.onDestroy();
+    }
+
+    @Override
+    protected void onSave(@NonNull Bundle state) {
+        if (pageList != null && !isDownloaded)
+            source.savePageList(chapter.url, pageList);
+
+        super.onSave(state);
     }
 
     private void onProcessRestart() {
@@ -241,6 +246,9 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
     }
 
     private void updateMangaSyncLastChapterRead() {
+        if (pageList == null)
+            return;
+
         db.getMangaSync(manga).createObservable()
                 .take(1)
                 .flatMap(Observable::from)
@@ -249,15 +257,21 @@ public class ReaderPresenter extends BasePresenter<ReaderActivity> {
                     if (!service.isLogged())
                         return;
 
-                    int lastChapterReadLocal = (int) Math.floor(chapter.chapter_number);
-                    int lastChapterReadRemote = mangaSync.last_chapter_read;
+                    int lastChapterReadLocal = 0;
+                    // If the current chapter has been read, we check with this one
+                    if (chapter.read)
+                        lastChapterReadLocal = (int) Math.floor(chapter.chapter_number);
+                    // If not, we check if the previous chapter has been read
+                    else if (previousChapter != null && previousChapter.read)
+                        lastChapterReadLocal = (int) Math.floor(previousChapter.chapter_number);
 
-                    if (lastChapterReadLocal > lastChapterReadRemote) {
+                    if (lastChapterReadLocal > mangaSync.last_chapter_read) {
                         mangaSync.last_chapter_read = lastChapterReadLocal;
                         UpdateMangaSyncService.start(getContext(), mangaSync);
                     }
                 })
-                .subscribe();
+                .subscribe(next -> {},
+                        error -> Timber.e(error.getCause(), error.getMessage()));
     }
 
     public void setCurrentPage(int currentPage) {

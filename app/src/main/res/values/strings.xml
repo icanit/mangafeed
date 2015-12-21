@@ -24,6 +24,8 @@
     <string name="action_show_unread">Unread</string>
     <string name="action_show_downloaded">Downloaded</string>
     <string name="action_next_unread">Next unread</string>
+    <string name="action_start">Start</string>
+    <string name="action_stop">Stop</string>
 
     <!-- Buttons -->
     <string name="button_ok">OK</string>
@@ -116,6 +118,14 @@
     <string name="chapter_downloading_progress">Downloading (%1$d/%2$d)</string>
     <string name="chapter_error">Error</string>
     <string name="fetch_chapters_error">Error while fetching chapters</string>
+
+    <!-- MyAnimeList fragment -->
+    <string name="reading">Reading</string>
+    <string name="completed">Completed</string>
+    <string name="dropped">Dropped</string>
+    <string name="on_hold">On hold</string>
+    <string name="plan_to_read">Plan to read</string>
+    <string name="score">Score</string>
 
     <!-- Reader activity -->
     <string name="downloading">Downloading…</string>
