@@ -22,15 +22,15 @@ public class SettingsActivity extends BaseActivity {
     @Bind(R.id.toolbar) Toolbar toolbar;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    protected void onCreate(Bundle savedState) {
+        super.onCreate(savedState);
         App.get(this).getComponent().inject(this);
         setContentView(R.layout.activity_preferences);
         ButterKnife.bind(this);
 
         setupToolbar(toolbar);
 
-        if (savedInstanceState == null)
+        if (savedState == null)
             getFragmentManager().beginTransaction().replace(R.id.settings_content,
                     new SettingsMainFragment())
                     .commit();
@@ -47,6 +47,10 @@ public class SettingsActivity extends BaseActivity {
         public void onCreate(Bundle savedInstanceState) {
             super.onCreate(savedInstanceState);
             addPreferencesFromResource(R.xml.pref_main);
+
+            registerSubpreference(R.string.pref_category_general_key,
+                    SettingsGeneralFragment.newInstance(
+                            R.xml.pref_general, R.string.pref_category_general));
 
             registerSubpreference(R.string.pref_category_reader_key,
                     SettingsNestedFragment.newInstance(

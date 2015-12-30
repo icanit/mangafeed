@@ -1,14 +1,26 @@
 package eu.kanade.mangafeed.ui.base.activity;
 
-import android.content.Context;
-import android.os.Build;
+import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.MenuItem;
 
 import de.greenrobot.event.EventBus;
+import icepick.Icepick;
 
 public class BaseActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedState) {
+        super.onCreate(savedState);
+        Icepick.restoreInstanceState(this, savedState);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        Icepick.saveInstanceState(this, outState);
+    }
 
     protected void setupToolbar(Toolbar toolbar) {
         setSupportActionBar(toolbar);
@@ -36,15 +48,6 @@ public class BaseActivity extends AppCompatActivity {
             getSupportActionBar().setSubtitle(getString(titleResource));
     }
 
-    public void setToolbarElevation(int elevation) {
-        if (getSupportActionBar() != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-            getSupportActionBar().setElevation(elevation);
-    }
-
-    public Context getActivity() {
-        return this;
-    }
-
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
@@ -56,11 +59,19 @@ public class BaseActivity extends AppCompatActivity {
     }
 
     public void registerForStickyEvents() {
-        EventBus.getDefault().registerSticky(this);
+        registerForStickyEvents(0);
+    }
+
+    public void registerForStickyEvents(int priority) {
+        EventBus.getDefault().registerSticky(this, priority);
     }
 
     public void registerForEvents() {
-        EventBus.getDefault().register(this);
+        registerForEvents(0);
+    }
+
+    public void registerForEvents(int priority) {
+        EventBus.getDefault().register(this, priority);
     }
 
     public void unregisterForEvents() {

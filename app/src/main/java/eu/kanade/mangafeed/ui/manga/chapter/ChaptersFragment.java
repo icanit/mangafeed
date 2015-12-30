@@ -28,6 +28,7 @@ import eu.kanade.mangafeed.data.database.models.Chapter;
 import eu.kanade.mangafeed.data.download.DownloadService;
 import eu.kanade.mangafeed.data.download.model.Download;
 import eu.kanade.mangafeed.ui.base.activity.BaseActivity;
+import eu.kanade.mangafeed.ui.base.adapter.FlexibleViewHolder;
 import eu.kanade.mangafeed.ui.base.fragment.BaseRxFragment;
 import eu.kanade.mangafeed.ui.decoration.DividerItemDecoration;
 import eu.kanade.mangafeed.ui.manga.MangaActivity;
@@ -41,7 +42,7 @@ import rx.schedulers.Schedulers;
 
 @RequiresPresenter(ChaptersPresenter.class)
 public class ChaptersFragment extends BaseRxFragment<ChaptersPresenter> implements
-        ActionMode.Callback, ChaptersAdapter.OnItemClickListener {
+        ActionMode.Callback, FlexibleViewHolder.OnListItemClickListener {
 
     @Bind(R.id.chapter_list) RecyclerView recyclerView;
     @Bind(R.id.swipe_refresh) SwipeRefreshLayout swipeRefresh;
@@ -144,7 +145,7 @@ public class ChaptersFragment extends BaseRxFragment<ChaptersPresenter> implemen
         if (getPresenter().getChapters().isEmpty())
             initialFetchChapters();
 
-        closeActionMode();
+        destroyActionModeIfNeeded();
         adapter.setItems(chapters);
     }
 
@@ -253,15 +254,15 @@ public class ChaptersFragment extends BaseRxFragment<ChaptersPresenter> implemen
         return Observable.from(chapters);
     }
 
-    public void closeActionMode() {
-        if (actionMode != null)
+    public void destroyActionModeIfNeeded() {
+        if (actionMode != null) {
             actionMode.finish();
+        }
     }
 
     protected boolean onSelectAll() {
         adapter.selectAll();
         setContextTitle(adapter.getSelectedItemCount());
-        actionMode.invalidate();
         return true;
     }
 
@@ -282,7 +283,7 @@ public class ChaptersFragment extends BaseRxFragment<ChaptersPresenter> implemen
                 .doOnCompleted(adapter::notifyDataSetChanged);
 
         getPresenter().downloadChapters(observable);
-        closeActionMode();
+        destroyActionModeIfNeeded();
         return true;
     }
 
@@ -310,7 +311,7 @@ public class ChaptersFragment extends BaseRxFragment<ChaptersPresenter> implemen
                 .finallyDo(dialog::dismiss);
 
         getPresenter().deleteChapters(observable);
-        closeActionMode();
+        destroyActionModeIfNeeded();
         return true;
     }
 
@@ -346,7 +347,7 @@ public class ChaptersFragment extends BaseRxFragment<ChaptersPresenter> implemen
     }
 
     private void setContextTitle(int count) {
-        actionMode.setTitle(getString(R.string.selected_chapters_title, count));
+        actionMode.setTitle(getString(R.string.label_selected, count));
     }
 
     public void setSortIcon() {

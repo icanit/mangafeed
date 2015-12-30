@@ -49,14 +49,13 @@ public class MangaActivity extends BaseRxActivity<MangaPresenter> {
     }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    protected void onCreate(Bundle savedState) {
+        super.onCreate(savedState);
         App.get(this).getComponent().inject(this);
-        setContentView(R.layout.activity_manga_detail);
+        setContentView(R.layout.activity_manga);
         ButterKnife.bind(this);
 
         setupToolbar(toolbar);
-        setToolbarElevation(0);
 
         Intent intent = getIntent();
 
@@ -65,14 +64,12 @@ public class MangaActivity extends BaseRxActivity<MangaPresenter> {
 
         setupViewPager();
 
-        if (savedInstanceState == null)
+        if (savedState == null)
             getPresenter().queryManga(manga_id);
     }
 
     private void setupViewPager() {
-        adapter = new MangaDetailAdapter(
-                getSupportFragmentManager(),
-                getActivity());
+        adapter = new MangaDetailAdapter(getSupportFragmentManager(), this);
 
         view_pager.setAdapter(adapter);
         tabs.setupWithViewPager(view_pager);

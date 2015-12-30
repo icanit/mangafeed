@@ -2,37 +2,40 @@ package eu.kanade.mangafeed.data.database;
 
 import android.content.Context;
 
-import com.pushtorefresh.storio.sqlite.SQLiteTypeMapping;
+import com.pushtorefresh.storio.Queries;
 import com.pushtorefresh.storio.sqlite.StorIOSQLite;
 import com.pushtorefresh.storio.sqlite.impl.DefaultStorIOSQLite;
+import com.pushtorefresh.storio.sqlite.operations.delete.PreparedDeleteByQuery;
 import com.pushtorefresh.storio.sqlite.operations.delete.PreparedDeleteCollectionOfObjects;
 import com.pushtorefresh.storio.sqlite.operations.delete.PreparedDeleteObject;
 import com.pushtorefresh.storio.sqlite.operations.get.PreparedGetListOfObjects;
+import com.pushtorefresh.storio.sqlite.operations.get.PreparedGetObject;
 import com.pushtorefresh.storio.sqlite.operations.put.PreparedPutCollectionOfObjects;
 import com.pushtorefresh.storio.sqlite.operations.put.PreparedPutObject;
 import com.pushtorefresh.storio.sqlite.operations.put.PutResults;
+import com.pushtorefresh.storio.sqlite.queries.DeleteQuery;
 import com.pushtorefresh.storio.sqlite.queries.Query;
 import com.pushtorefresh.storio.sqlite.queries.RawQuery;
 
 import java.util.List;
 
-import eu.kanade.mangafeed.data.database.models.MangaSync;
-import eu.kanade.mangafeed.data.mangasync.base.MangaSyncService;
+import eu.kanade.mangafeed.data.database.models.Category;
+import eu.kanade.mangafeed.data.database.models.CategorySQLiteTypeMapping;
 import eu.kanade.mangafeed.data.database.models.Chapter;
-import eu.kanade.mangafeed.data.database.models.ChapterStorIOSQLiteDeleteResolver;
-import eu.kanade.mangafeed.data.database.models.ChapterStorIOSQLiteGetResolver;
-import eu.kanade.mangafeed.data.database.models.ChapterStorIOSQLitePutResolver;
+import eu.kanade.mangafeed.data.database.models.ChapterSQLiteTypeMapping;
 import eu.kanade.mangafeed.data.database.models.Manga;
-import eu.kanade.mangafeed.data.database.models.MangaStorIOSQLiteDeleteResolver;
-import eu.kanade.mangafeed.data.database.models.MangaStorIOSQLiteGetResolver;
-import eu.kanade.mangafeed.data.database.models.MangaStorIOSQLitePutResolver;
-import eu.kanade.mangafeed.data.database.models.MangaSyncStorIOSQLiteDeleteResolver;
-import eu.kanade.mangafeed.data.database.models.MangaSyncStorIOSQLiteGetResolver;
-import eu.kanade.mangafeed.data.database.models.MangaSyncStorIOSQLitePutResolver;
-import eu.kanade.mangafeed.data.database.resolvers.MangaWithUnreadGetResolver;
-import eu.kanade.mangafeed.data.database.tables.MangaSyncTable;
+import eu.kanade.mangafeed.data.database.models.MangaCategory;
+import eu.kanade.mangafeed.data.database.models.MangaCategorySQLiteTypeMapping;
+import eu.kanade.mangafeed.data.database.models.MangaSQLiteTypeMapping;
+import eu.kanade.mangafeed.data.database.models.MangaSync;
+import eu.kanade.mangafeed.data.database.models.MangaSyncSQLiteTypeMapping;
+import eu.kanade.mangafeed.data.database.resolvers.LibraryMangaGetResolver;
+import eu.kanade.mangafeed.data.database.tables.CategoryTable;
 import eu.kanade.mangafeed.data.database.tables.ChapterTable;
+import eu.kanade.mangafeed.data.database.tables.MangaCategoryTable;
+import eu.kanade.mangafeed.data.database.tables.MangaSyncTable;
 import eu.kanade.mangafeed.data.database.tables.MangaTable;
+import eu.kanade.mangafeed.data.mangasync.base.MangaSyncService;
 import eu.kanade.mangafeed.util.ChapterRecognition;
 import eu.kanade.mangafeed.util.PostResult;
 import rx.Observable;
@@ -45,39 +48,15 @@ public class DatabaseHelper {
 
         db = DefaultStorIOSQLite.builder()
                 .sqliteOpenHelper(new DbOpenHelper(context))
-                .addTypeMapping(Manga.class, SQLiteTypeMapping.<Manga>builder()
-                        .putResolver(new MangaStorIOSQLitePutResolver())
-                        .getResolver(new MangaStorIOSQLiteGetResolver())
-                        .deleteResolver(new MangaStorIOSQLiteDeleteResolver())
-                        .build())
-                .addTypeMapping(Chapter.class, SQLiteTypeMapping.<Chapter>builder()
-                        .putResolver(new ChapterStorIOSQLitePutResolver())
-                        .getResolver(new ChapterStorIOSQLiteGetResolver())
-                        .deleteResolver(new ChapterStorIOSQLiteDeleteResolver())
-                        .build())
-                .addTypeMapping(MangaSync.class, SQLiteTypeMapping.<MangaSync>builder()
-                        .putResolver(new MangaSyncStorIOSQLitePutResolver())
-                        .getResolver(new MangaSyncStorIOSQLiteGetResolver())
-                        .deleteResolver(new MangaSyncStorIOSQLiteDeleteResolver())
-                        .build())
+                .addTypeMapping(Manga.class, new MangaSQLiteTypeMapping())
+                .addTypeMapping(Chapter.class, new ChapterSQLiteTypeMapping())
+                .addTypeMapping(MangaSync.class, new MangaSyncSQLiteTypeMapping())
+                .addTypeMapping(Category.class, new CategorySQLiteTypeMapping())
+                .addTypeMapping(MangaCategory.class, new MangaCategorySQLiteTypeMapping())
                 .build();
     }
 
     // Mangas related queries
-
-    private final String favoriteMangasWithUnreadQuery = String.format(
-            "SELECT %1$s.*, COUNT(C.%4$s) AS %5$s FROM %1$s LEFT JOIN " +
-                    "(SELECT %4$s FROM %2$s WHERE %6$s = 0) AS C ON %3$s = C.%4$s " +
-                    "WHERE %7$s = 1 GROUP BY %3$s ORDER BY %1$s.%8$s",
-            MangaTable.TABLE,
-            ChapterTable.TABLE,
-            MangaTable.TABLE + "." + MangaTable.COLUMN_ID,
-            ChapterTable.COLUMN_MANGA_ID,
-            MangaTable.COLUMN_UNREAD,
-            ChapterTable.COLUMN_READ,
-            MangaTable.COLUMN_FAVORITE,
-            MangaTable.COLUMN_TITLE
-    );
 
     public PreparedGetListOfObjects<Manga> getMangas() {
         return db.get()
@@ -88,14 +67,14 @@ public class DatabaseHelper {
                 .prepare();
     }
 
-    public PreparedGetListOfObjects<Manga> getFavoriteMangasWithUnread() {
+    public PreparedGetListOfObjects<Manga> getLibraryMangas() {
         return db.get()
                 .listOfObjects(Manga.class)
                 .withQuery(RawQuery.builder()
-                        .query(favoriteMangasWithUnreadQuery)
-                        .observesTables(MangaTable.TABLE, ChapterTable.TABLE)
+                        .query(LibraryMangaGetResolver.QUERY)
+                        .observesTables(MangaTable.TABLE, ChapterTable.TABLE, MangaCategoryTable.TABLE)
                         .build())
-                .withGetResolver(MangaWithUnreadGetResolver.instance)
+                .withGetResolver(LibraryMangaGetResolver.INSTANCE)
                 .prepare();
     }
 
@@ -106,13 +85,14 @@ public class DatabaseHelper {
                         .table(MangaTable.TABLE)
                         .where(MangaTable.COLUMN_FAVORITE + "=?")
                         .whereArgs(1)
+                        .orderBy(MangaTable.COLUMN_TITLE)
                         .build())
                 .prepare();
     }
 
-    public PreparedGetListOfObjects<Manga> getManga(String url, int sourceId) {
+    public PreparedGetObject<Manga> getManga(String url, int sourceId) {
         return db.get()
-                .listOfObjects(Manga.class)
+                .object(Manga.class)
                 .withQuery(Query.builder()
                         .table(MangaTable.TABLE)
                         .where(MangaTable.COLUMN_URL + "=? AND " + MangaTable.COLUMN_SOURCE + "=?")
@@ -121,9 +101,9 @@ public class DatabaseHelper {
                 .prepare();
     }
 
-    public PreparedGetListOfObjects<Manga> getManga(long id) {
+    public PreparedGetObject<Manga> getManga(long id) {
         return db.get()
-                .listOfObjects(Manga.class)
+                .object(Manga.class)
                 .withQuery(Query.builder()
                         .table(MangaTable.TABLE)
                         .where(MangaTable.COLUMN_ID + "=?")
@@ -190,13 +170,13 @@ public class DatabaseHelper {
                 .prepare();
     }
 
-    public PreparedGetListOfObjects<Chapter> getNextChapter(Chapter chapter) {
+    public PreparedGetObject<Chapter> getNextChapter(Chapter chapter) {
         // Add a delta to the chapter number, because binary decimal representation
         // can retrieve the same chapter again
         double chapterNumber = chapter.chapter_number + 0.00001;
 
         return db.get()
-                .listOfObjects(Chapter.class)
+                .object(Chapter.class)
                 .withQuery(Query.builder()
                         .table(ChapterTable.TABLE)
                         .where(ChapterTable.COLUMN_MANGA_ID + "=? AND " +
@@ -209,13 +189,13 @@ public class DatabaseHelper {
                 .prepare();
     }
 
-    public PreparedGetListOfObjects<Chapter> getPreviousChapter(Chapter chapter) {
+    public PreparedGetObject<Chapter> getPreviousChapter(Chapter chapter) {
         // Add a delta to the chapter number, because binary decimal representation
         // can retrieve the same chapter again
         double chapterNumber = chapter.chapter_number - 0.00001;
 
         return db.get()
-                .listOfObjects(Chapter.class)
+                .object(Chapter.class)
                 .withQuery(Query.builder()
                         .table(ChapterTable.TABLE)
                         .where(ChapterTable.COLUMN_MANGA_ID + "=? AND " +
@@ -228,9 +208,9 @@ public class DatabaseHelper {
                 .prepare();
     }
 
-    public PreparedGetListOfObjects<Chapter> getNextUnreadChapter(Manga manga) {
+    public PreparedGetObject<Chapter> getNextUnreadChapter(Manga manga) {
         return db.get()
-                .listOfObjects(Chapter.class)
+                .object(Chapter.class)
                 .withQuery(Query.builder()
                         .table(ChapterTable.TABLE)
                         .where(ChapterTable.COLUMN_MANGA_ID + "=? AND " +
@@ -303,9 +283,9 @@ public class DatabaseHelper {
 
     // Manga sync related queries
 
-    public PreparedGetListOfObjects<MangaSync> getMangaSync(Manga manga, MangaSyncService sync) {
+    public PreparedGetObject<MangaSync> getMangaSync(Manga manga, MangaSyncService sync) {
         return db.get()
-                .listOfObjects(MangaSync.class)
+                .object(MangaSync.class)
                 .withQuery(Query.builder()
                         .table(MangaSyncTable.TABLE)
                         .where(MangaSyncTable.COLUMN_MANGA_ID + "=? AND " +
@@ -315,7 +295,7 @@ public class DatabaseHelper {
                 .prepare();
     }
 
-    public PreparedGetListOfObjects<MangaSync> getMangaSync(Manga manga) {
+    public PreparedGetListOfObjects<MangaSync> getMangasSync(Manga manga) {
         return db.get()
                 .listOfObjects(MangaSync.class)
                 .withQuery(Query.builder()
@@ -337,4 +317,79 @@ public class DatabaseHelper {
                 .object(manga)
                 .prepare();
     }
+
+    // Categories related queries
+
+    public PreparedGetListOfObjects<Category> getCategories() {
+        return db.get()
+                .listOfObjects(Category.class)
+                .withQuery(Query.builder()
+                        .table(CategoryTable.TABLE)
+                        .orderBy(CategoryTable.COLUMN_ORDER)
+                        .build())
+                .prepare();
+    }
+
+    public PreparedPutObject<Category> insertCategory(Category category) {
+        return db.put()
+                .object(category)
+                .prepare();
+    }
+
+    public PreparedPutCollectionOfObjects<Category> insertCategories(List<Category> categories) {
+        return db.put()
+                .objects(categories)
+                .prepare();
+    }
+
+    public PreparedDeleteObject<Category> deleteCategory(Category category) {
+        return db.delete()
+                .object(category)
+                .prepare();
+    }
+
+    public PreparedDeleteCollectionOfObjects<Category> deleteCategories(List<Category> categories) {
+        return db.delete()
+                .objects(categories)
+                .prepare();
+    }
+
+    public PreparedPutObject<MangaCategory> insertMangaCategory(MangaCategory mangaCategory) {
+        return db.put()
+                .object(mangaCategory)
+                .prepare();
+    }
+
+    public PreparedPutCollectionOfObjects<MangaCategory> insertMangasCategories(List<MangaCategory> mangasCategories) {
+        return db.put()
+                .objects(mangasCategories)
+                .prepare();
+    }
+
+    public PreparedDeleteByQuery deleteOldMangasCategories(List<Manga> mangas) {
+        List<Long> mangaIds = Observable.from(mangas)
+                .map(manga -> manga.id)
+                .toList().toBlocking().single();
+
+        return db.delete()
+                .byQuery(DeleteQuery.builder()
+                        .table(MangaCategoryTable.TABLE)
+                        .where(MangaCategoryTable.COLUMN_MANGA_ID + " IN ("
+                                + Queries.placeholders(mangas.size()) + ")")
+                        .whereArgs(mangaIds.toArray())
+                        .build())
+                .prepare();
+    }
+
+    public void setMangaCategories(List<MangaCategory> mangasCategories, List<Manga> mangas) {
+        db.internal().beginTransaction();
+        try {
+            deleteOldMangasCategories(mangas).executeAsBlocking();
+            insertMangasCategories(mangasCategories).executeAsBlocking();
+            db.internal().setTransactionSuccessful();
+        } finally {
+            db.internal().endTransaction();
+        }
+    }
+
 }

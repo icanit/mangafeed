@@ -9,7 +9,7 @@ import eu.kanade.mangafeed.data.database.tables.MangaTable;
 
 public class MangaWithUnreadGetResolver extends MangaStorIOSQLiteGetResolver {
 
-    public static final MangaWithUnreadGetResolver instance = new MangaWithUnreadGetResolver();
+    public static final MangaWithUnreadGetResolver INSTANCE = new MangaWithUnreadGetResolver();
 
     @Override
     @NonNull
