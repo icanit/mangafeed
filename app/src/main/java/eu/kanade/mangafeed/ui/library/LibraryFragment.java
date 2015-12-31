@@ -5,10 +5,8 @@ import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.design.widget.AppBarLayout;
 import android.support.design.widget.TabLayout;
-import android.support.v4.app.Fragment;
 import android.support.v4.view.ViewPager;
 import android.support.v7.view.ActionMode;
-import android.util.Pair;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -31,23 +29,25 @@ import eu.kanade.mangafeed.data.database.models.Category;
 import eu.kanade.mangafeed.data.database.models.Manga;
 import eu.kanade.mangafeed.data.sync.LibraryUpdateService;
 import eu.kanade.mangafeed.event.LibraryMangasEvent;
-import eu.kanade.mangafeed.ui.base.activity.BaseActivity;
 import eu.kanade.mangafeed.ui.base.fragment.BaseRxFragment;
-import eu.kanade.mangafeed.ui.library.category.CategoryFragment;
+import eu.kanade.mangafeed.ui.library.category.CategoryActivity;
 import eu.kanade.mangafeed.ui.main.MainActivity;
+import icepick.State;
 import nucleus.factory.RequiresPresenter;
 
 @RequiresPresenter(LibraryPresenter.class)
 public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
         implements ActionMode.Callback {
 
-    TabLayout tabs;
-    AppBarLayout appBar;
-
     @Bind(R.id.view_pager) ViewPager viewPager;
+    private TabLayout tabs;
+    private AppBarLayout appBar;
+
     protected LibraryAdapter adapter;
 
     private ActionMode actionMode;
+
+    @State int activeCategory;
 
     public static LibraryFragment newInstance() {
         return new LibraryFragment();
@@ -68,12 +68,12 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
         ButterKnife.bind(this, view);
 
         appBar = ((MainActivity) getActivity()).getAppBar();
-        tabs = (TabLayout) inflater.inflate(R.layout.tab_layout, appBar, false);
+        tabs = (TabLayout) inflater.inflate(R.layout.library_tab_layout, appBar, false);
         appBar.addView(tabs);
-
 
         adapter = new LibraryAdapter(getChildFragmentManager());
         viewPager.setAdapter(adapter);
+        tabs.setupWithViewPager(viewPager);
 
         return view;
     }
@@ -82,6 +82,18 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
     public void onDestroyView() {
         appBar.removeView(tabs);
         super.onDestroyView();
+    }
+
+    @Override
+    public void onPause() {
+        EventBus.getDefault().removeStickyEvent(LibraryMangasEvent.class);
+        super.onPause();
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle bundle) {
+        activeCategory = viewPager.getCurrentItem();
+        super.onSaveInstanceState(bundle);
     }
 
     @Override
@@ -107,26 +119,28 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
     }
 
     private void onEditCategories() {
-        Fragment fragment = CategoryFragment.newInstance();
-        ((MainActivity) getActivity()).pushFragment(fragment);
+        Intent intent = CategoryActivity.newIntent(getActivity());
+        startActivity(intent);
     }
 
-    public void onNextLibraryUpdate(Pair<List<Category>, Map<Integer, List<Manga>>> pair) {
-        boolean mangasInDefaultCategory = pair.second.get(0) != null;
-        boolean initialized = adapter.categories != null;
+    public void onNextLibraryUpdate(List<Category> categories, Map<Integer, List<Manga>> mangas) {
+        boolean hasMangasInDefaultCategory = mangas.get(0) != null;
+        int activeCat = adapter.categories != null ? viewPager.getCurrentItem() : activeCategory;
 
-        // If there are mangas in the default category and the adapter doesn't have it,
-        // create the default category
-        if (mangasInDefaultCategory && (!initialized || !adapter.hasDefaultCategory())) {
-            setCategoriesWithDefault(pair.first);
+        if (hasMangasInDefaultCategory) {
+            setCategoriesWithDefault(categories);
+        } else {
+            setCategories(categories);
         }
-        // If there aren't mangas in the default category and the adapter have it,
-        // remove the default category
-        else if (!mangasInDefaultCategory && (!initialized || adapter.hasDefaultCategory())) {
-            setCategories(pair.first);
+        // Restore active category
+        viewPager.setCurrentItem(activeCat, false);
+        if (tabs.getTabCount() > 0) {
+            TabLayout.Tab tab = tabs.getTabAt(viewPager.getCurrentItem());
+            if (tab != null) tab.select();
         }
+
         // Send the mangas to child fragments after the adapter is updated
-        EventBus.getDefault().postSticky(new LibraryMangasEvent(pair.second));
+        EventBus.getDefault().postSticky(new LibraryMangasEvent(mangas));
     }
 
     private void setCategoriesWithDefault(List<Category> categories) {
@@ -139,8 +153,8 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
 
     private void setCategories(List<Category> categories) {
         adapter.setCategories(categories);
-        tabs.setupWithViewPager(viewPager);
-        tabs.setVisibility(categories.size() == 1 ? View.GONE : View.VISIBLE);
+        tabs.setTabsFromPagerAdapter(adapter);
+        tabs.setVisibility(categories.size() <= 1 ? View.GONE : View.VISIBLE);
     }
 
     public void setContextTitle(int count) {
@@ -211,7 +225,7 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
 
     public void createActionModeIfNeeded() {
         if (actionMode == null) {
-            actionMode = ((BaseActivity) getActivity()).startSupportActionMode(this);
+            actionMode = getBaseActivity().startSupportActionMode(this);
         }
     }
 
