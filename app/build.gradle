@@ -35,12 +35,12 @@ android {
     publishNonDefault true
 
     defaultConfig {
-        applicationId "eu.kanade.mangafeed"
+        applicationId "eu.kanade.tachiyomi"
         minSdkVersion 16
         targetSdkVersion 23
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
-        versionCode 1
-        versionName "1.0"
+        versionCode 3
+        versionName "0.1.2"
 
         buildConfigField "String", "COMMIT_COUNT", "\"${getCommitCount()}\""
         buildConfigField "String", "COMMIT_SHA", "\"${getGitSha()}\""
@@ -53,8 +53,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+        }
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
@@ -69,6 +73,7 @@ android {
 
     lintOptions {
         abortOnError false
+        checkReleaseBuilds false
     }
 
 }
@@ -76,9 +81,8 @@ android {
 dependencies {
     final SUPPORT_LIBRARY_VERSION = '23.1.1'
     final DAGGER_VERSION = '2.0.2'
-    final HAMCREST_VERSION = '1.3'
     final MOCKITO_VERSION = '1.10.19'
-    final STORIO_VERSION = '1.7.0'
+    final STORIO_VERSION = '1.8.0'
     final ICEPICK_VERSION = '3.1.0'
 
     compile fileTree(dir: 'libs', include: ['*.jar'])
@@ -90,8 +94,9 @@ dependencies {
     compile "com.android.support:design:$SUPPORT_LIBRARY_VERSION"
     compile "com.android.support:recyclerview-v7:$SUPPORT_LIBRARY_VERSION"
     compile "com.android.support:support-annotations:$SUPPORT_LIBRARY_VERSION"
-    compile 'com.squareup.okhttp:okhttp-urlconnection:2.7.0'
-    compile 'com.squareup.okhttp:okhttp:2.7.0'
+    compile "com.android.support:percent:$SUPPORT_LIBRARY_VERSION"
+    compile 'com.squareup.okhttp:okhttp-urlconnection:2.7.2'
+    compile 'com.squareup.okhttp:okhttp:2.7.2'
     compile 'com.squareup.okio:okio:1.6.0'
     compile 'com.google.code.gson:gson:2.5'
     compile 'com.jakewharton:disklrucache:2.0.2'
@@ -111,16 +116,17 @@ dependencies {
     compile "frankiesardo:icepick:$ICEPICK_VERSION"
     provided "frankiesardo:icepick-processor:$ICEPICK_VERSION"
     compile 'com.github.dmytrodanylyk.android-process-button:library:1.0.4'
-    compile 'eu.davidea:flexible-adapter:4.2.0@aar'
-    compile 'com.nononsenseapps:filepicker:2.5.0'
-    compile 'com.amulyakhare:com.amulyakhare.textdrawable:1.0.1'
+    compile 'eu.davidea:flexible-adapter:4.2.0'
+    compile 'com.nononsenseapps:filepicker:2.5.1'
+    compile 'com.github.amulyakhare:TextDrawable:558677e'
+    compile 'com.github.pwittchen:reactivenetwork:0.1.5'
 
     compile "com.google.dagger:dagger:$DAGGER_VERSION"
     apt "com.google.dagger:dagger-compiler:$DAGGER_VERSION"
     apt "com.pushtorefresh.storio:sqlite-annotations-processor:$STORIO_VERSION"
     provided 'org.glassfish:javax.annotation:10.0-b28'
 
-    compile('com.mikepenz:materialdrawer:4.6.1@aar') {
+    compile('com.mikepenz:materialdrawer:4.6.4@aar') {
         transitive = true
     }
     compile('com.github.afollestad.material-dialogs:core:0.8.5.3@aar') {
@@ -128,9 +134,7 @@ dependencies {
     }
 
     testCompile 'junit:junit:4.12'
-    testCompile "org.hamcrest:hamcrest-core:$HAMCREST_VERSION"
-    testCompile "org.hamcrest:hamcrest-library:$HAMCREST_VERSION"
-    testCompile "org.hamcrest:hamcrest-integration:$HAMCREST_VERSION"
+    testCompile 'org.assertj:assertj-core:2.3.0'
     testCompile "org.mockito:mockito-core:$MOCKITO_VERSION"
     testCompile('org.robolectric:robolectric:3.0') {
         exclude group: 'commons-logging', module: 'commons-logging'

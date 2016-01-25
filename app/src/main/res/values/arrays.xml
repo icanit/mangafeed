@@ -28,18 +28,6 @@
         <item>3</item>
     </string-array>
 
-    <string-array name="cache_size">
-        <item>50 MB</item>
-        <item>75 MB</item>
-        <item>100 MB</item>
-    </string-array>
-
-    <string-array name="cache_values">
-        <item>50</item>
-        <item>75</item>
-        <item>100</item>
-    </string-array>
-
     <string-array name="reader_themes">
         <item>@string/white_theme</item>
         <item>@string/black_theme</item>
@@ -48,6 +36,38 @@
     <string-array name="reader_themes_values">
         <item>0</item>
         <item>1</item>
+    </string-array>
+
+    <string-array name="image_decoders">
+        <item>@string/rapid_decoder</item>
+        <item>@string/skia_decoder</item>
+    </string-array>
+
+    <string-array name="image_decoders_values">
+        <item>0</item>
+        <item>1</item>
+    </string-array>
+
+    <string-array name="library_update_interval">
+        <item>@string/update_never</item>
+        <item>@string/update_1hour</item>
+        <item>@string/update_2hour</item>
+        <item>@string/update_3hour</item>
+        <item>@string/update_6hour</item>
+        <item>@string/update_12hour</item>
+        <item>@string/update_24hour</item>
+        <item>@string/update_48hour</item>
+    </string-array>
+
+    <string-array name="library_update_interval_values">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>6</item>
+        <item>12</item>
+        <item>24</item>
+        <item>48</item>
     </string-array>
 
 </resources>

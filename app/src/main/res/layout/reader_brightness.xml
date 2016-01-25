@@ -3,7 +3,7 @@
     android:orientation="vertical"
     android:layout_width="wrap_content"
     android:layout_height="match_parent"
-    android:background="#333333"
+    android:background="@color/reader_menu_background"
     android:paddingRight="10dp"
     android:paddingLeft="5dp"
     android:paddingTop="5dp"
@@ -12,7 +12,7 @@
     <CheckBox
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        style="@style/grey_text"
+        style="@style/reader_menu_settings_item"
         android:text="@string/pref_custom_brightness"
         android:id="@+id/custom_brightness" />
 

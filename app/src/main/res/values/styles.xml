@@ -1,41 +1,55 @@
 <resources>
 
-    <style name="AppTheme" parent="AppTheme.Base">
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
-        <item name="colorButtonNormal">@color/colorPrimary</item>
-
-        <item name="android:background">@color/white</item>
+        <item name="alertDialogTheme">@style/AlertDialogStyle</item>
         <item name="android:textColor">@color/primary_text</item>
-
+        <item name="windowActionModeOverlay">true</item>
     </style>
 
-    <style name="AppTheme.Base" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:windowActionModeOverlay">true</item>
-        <item name="windowActionModeOverlay">true</item>
-
-    </style>
-
-    <style name="ThemeOverlay.AppTheme.Dark" parent="ThemeOverlay.AppCompat.Dark.ActionBar">
-        <item name="colorAccent">@color/white</item>
-        <item name="android:windowActionModeOverlay">true</item>
-        <item name="windowActionModeOverlay">true</item>
-
-        <item name="android:actionModeBackground">@color/colorPrimarySuperDark</item>
+    <style name="AppTheme.ActionBar" parent="ThemeOverlay.AppCompat.Dark.ActionBar">
+        <item name="android:spinnerItemStyle">@style/ActionBarSpinner</item>
+        <item name="android:spinnerDropDownItemStyle">@style/ActionBarSpinnerItem</item>
         <item name="actionModeBackground">@color/colorPrimarySuperDark</item>
+        <item name="actionBarPopupTheme">@style/ThemeOverlay.AppCompat.Light</item>
+        <item name="popupTheme">@style/ThemeOverlay.AppCompat.Light</item>
+        <item name="colorAccent">@color/white</item>
     </style>
 
-    <style name="AppTheme.Popup" parent="@style/ThemeOverlay.AppTheme.Dark">
+    <style name="AppTheme.Overlay.Dark" parent="ThemeOverlay.AppCompat.Dark.ActionBar">
+        <item name="colorAccent">@color/white</item>
+    </style>
+
+    <style name="AlertDialogStyle" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="android:windowTitleStyle">@style/DialogTitleText</item>
+        <item name="colorAccent">@color/primary</item>
+    </style>
+
+    <style name="DialogTitleText">
+        <item name="android:textColor">@color/primary_text</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppCompat.Title</item>
+    </style>
+
+    <style name="ActionBarSpinner" parent="@style/Widget.AppCompat.TextView.SpinnerItem">
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textColorHint">@color/hint_foreground_material_dark</item>
+    </style>
+
+    <style name="ActionBarSpinnerItem" parent="@style/Widget.AppCompat.DropDownItem.Spinner">
+        <item name="android:background">@color/background_material_light</item>
+    </style>
+
+    <style name="AppTheme.Popup" parent="@style/AppTheme.Overlay.Dark">
         <item name="colorAccent">@color/white</item>
         <item name="android:background">@color/colorPrimary</item>
         <item name="android:textColor">@color/white</item>
     </style>
 
     <style name="AppTheme.GridView" parent="AppTheme">
-
         <item name="android:layout_width">match_parent</item>
-        <item name="android:padding">10dp</item>
+        <item name="android:padding">5dp</item>
         <item name="android:layout_height">match_parent</item>
         <item name="android:clipToPadding">false</item>
         <item name="android:gravity">top|left</item>
@@ -58,7 +72,7 @@
 
         <item name="alertDialogTheme">@style/FilePickerAlertDialogTheme</item>
 
-        <item name="nnf_toolbarTheme">@style/ThemeOverlay.AppTheme.Dark</item>
+        <item name="nnf_toolbarTheme">@style/AppTheme.Overlay.Dark</item>
     </style>
 
     <style name="FilePickerAlertDialogTheme" parent="Theme.AppCompat.Light.Dialog.Alert">
@@ -93,7 +107,11 @@
         <item name="android:windowExitAnimation">@anim/exit_to_left</item>
     </style>
 
-    <style name="grey_text">
+    <style name="reader_menu_settings_item">
         <item name="android:textColor">@color/md_grey_300</item>
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">36dp</item>
+        <item name="android:gravity">center</item>
     </style>
+
 </resources>
