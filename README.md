@@ -1,8 +1,17 @@
+[![stable release](https://img.shields.io/badge/release-v0.1.4-blue.svg)](https://github.com/inorichi/tachiyomi/releases)
+[![fdroid release](https://img.shields.io/badge/release-F--Droid-blue.svg)](https://f-droid.org/repository/browse/?fdid=eu.kanade.tachiyomi)
+[![latest debug build](https://img.shields.io/badge/debug-latest%20build-blue.svg)](http://tachiyomi.kanade.eu/latest/app-debug.apk)
+[![fdroid release](https://img.shields.io/badge/debug-F--Droid-blue.svg)](//github.com/inorichi/tachiyomi/wiki/FDroid-for-debug-versions)
+
+## [Report an issue](https://github.com/inorichi/tachiyomi/blob/master/.github/CONTRIBUTING.md)
+
+**Before reporting a new issue, take a look at the [FAQ](https://github.com/inorichi/tachiyomi/wiki/FAQ), the [changelog](https://github.com/inorichi/tachiyomi/releases) and the already opened issues.**
+
 Tachiyomi is a free and open source manga reader for Android.
 
 Keep in mind it's still a beta, so expect it to crash sometimes.
 
-Current features:
+## Features
 
 * Online and offline reading
 * Configurable reader with multiple viewers and settings
@@ -11,11 +20,6 @@ Current features:
 * Chapter filtering
 * Schedule searching for updates
 * Categories to organize your library
-
-## Download
-
-[![stable release](https://img.shields.io/badge/release-v0.1.2-blue.svg)](https://github.com/inorichi/tachiyomi/releases/download/v0.1.2/tachiyomi-v0.1.2.apk)
-[![latest debug build](https://img.shields.io/badge/debug-latest%20build-blue.svg)](http://tachiyomi.kanade.eu/latest/app-debug.apk)
 
 ## License
 

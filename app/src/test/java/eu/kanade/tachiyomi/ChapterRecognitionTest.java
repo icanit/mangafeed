@@ -135,4 +135,64 @@ public class ChapterRecognitionTest {
         assertThat(c.chapter_number).isEqualTo(28f);
     }
 
+    @Test
+    public void testWithVolumeAttachedToChapter() {
+        Chapter c = createChapter("Ansatsu Kyoushitsu 011v002: Assembly Time");
+        ChapterRecognition.parseChapterNumber(c, randomManga);
+        assertThat(c.chapter_number).isEqualTo(11f);
+    }
+
+    @Test
+    public void testWithNumberInChapterTitle() {
+        Chapter c = createChapter("Ansatsu Kyoushitsu 099 Present Time - 2nd Hour");
+        ChapterRecognition.parseChapterNumber(c, randomManga);
+        assertThat(c.chapter_number).isEqualTo(99f);
+    }
+
+    @Test
+    public void testAlphaSubChapters() {
+        Chapter c = createChapter("Asu No Yoichi 19a");
+        ChapterRecognition.parseChapterNumber(c, randomManga);
+        assertThat(c.chapter_number).isEqualTo(19.1f);
+        c = createChapter("Asu No Yoichi 19b");
+        ChapterRecognition.parseChapterNumber(c, randomManga);
+        assertThat(c.chapter_number).isEqualTo(19.2f);
+    }
+
+    @Test
+    public void testChapterWithArcNumber() {
+        Chapter c = createChapter("Manga title 123 - Vol 016 Arc title 002");
+        ChapterRecognition.parseChapterNumber(c, randomManga);
+        assertThat(c.chapter_number).isEqualTo(123f);
+    }
+
+    @Test
+    public void testChapterWithChapterPrefixAfterPart() {
+        Chapter c = createChapter("Tokyo ESP 027: Part 002: Chapter 001");
+        ChapterRecognition.parseChapterNumber(c, randomManga);
+        assertThat(c.chapter_number).isEqualTo(027f);
+    }
+
+    @Test
+    public void testUnparsable() {
+        Chapter c = createChapter("Foo");
+        ChapterRecognition.parseChapterNumber(c, randomManga);
+        assertThat(c.chapter_number).isEqualTo(-1f);
+    }
+
+    @Test
+    public void testChapterWithTime() {
+        Chapter c = createChapter("Fairy Tail 404: 00:00");
+        ChapterRecognition.parseChapterNumber(c, randomManga);
+        assertThat(c.chapter_number).isEqualTo(404f);
+    }
+
+    @Test
+    public void testPlainNumberInTitle() {
+        Chapter c = createChapter("Kuroko no Basket 002 Monday at 840 on the Rooftop");
+        Manga manga = new Manga();
+        manga.title = "Kuroko no Basket";
+        ChapterRecognition.parseChapterNumber(c, manga);
+        assertThat(c.chapter_number).isEqualTo(2f);
+    }
 }

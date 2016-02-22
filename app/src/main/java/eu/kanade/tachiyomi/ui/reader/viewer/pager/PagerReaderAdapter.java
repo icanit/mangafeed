@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.reader.viewer.pager;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentStatePagerAdapter;
+import android.view.ViewGroup;
 
 import java.util.List;
 
@@ -23,7 +24,15 @@ public class PagerReaderAdapter extends FragmentStatePagerAdapter {
 
     @Override
     public Fragment getItem(int position) {
-        return PagerReaderFragment.newInstance(pages.get(position));
+        return PagerReaderFragment.newInstance();
+    }
+
+    @Override
+    public Object instantiateItem(ViewGroup container, int position) {
+        PagerReaderFragment f = (PagerReaderFragment) super.instantiateItem(container, position);
+        f.setPage(pages.get(position));
+        f.setPosition(position);
+        return f;
     }
 
     public List<Page> getPages() {
@@ -37,7 +46,15 @@ public class PagerReaderAdapter extends FragmentStatePagerAdapter {
 
     @Override
     public int getItemPosition(Object object) {
-        return POSITION_NONE;
+        PagerReaderFragment f = (PagerReaderFragment) object;
+        int position = f.getPosition();
+        if (position >= 0 && position < getCount()) {
+            if (pages.get(position) == f.getPage()) {
+                return POSITION_UNCHANGED;
+            } else {
+                return POSITION_NONE;
+            }
+        }
+        return super.getItemPosition(object);
     }
-
 }

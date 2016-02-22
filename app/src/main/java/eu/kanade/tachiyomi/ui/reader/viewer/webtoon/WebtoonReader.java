@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.webtoon;
 
 import android.os.Bundle;
-import android.support.annotation.Nullable;
 import android.support.v7.widget.RecyclerView;
 import android.view.GestureDetector;
 import android.view.LayoutInflater;
@@ -9,8 +8,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
-import java.util.List;
+import java.util.ArrayList;
 
+import eu.kanade.tachiyomi.data.database.models.Chapter;
 import eu.kanade.tachiyomi.data.source.model.Page;
 import eu.kanade.tachiyomi.ui.reader.viewer.base.BaseReader;
 import eu.kanade.tachiyomi.widget.PreCachingLayoutManager;
@@ -28,14 +28,27 @@ public class WebtoonReader extends BaseReader {
     private PreCachingLayoutManager layoutManager;
     private Subscription subscription;
     private Subscription decoderSubscription;
-    private GestureDetector gestureDetector;
+    protected GestureDetector gestureDetector;
 
-    @Nullable
+    private int scrollDistance;
+
+    private static final String SAVED_POSITION = "saved_position";
+
+    private static final float LEFT_REGION = 0.33f;
+    private static final float RIGHT_REGION = 0.66f;
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedState) {
         adapter = new WebtoonAdapter(this);
+
+        int screenHeight = getResources().getDisplayMetrics().heightPixels;
+        scrollDistance = screenHeight * 3 / 4;
+
         layoutManager = new PreCachingLayoutManager(getActivity());
-        layoutManager.setExtraLayoutSpace(getResources().getDisplayMetrics().heightPixels);
+        layoutManager.setExtraLayoutSpace(screenHeight / 2);
+        if (savedState != null) {
+            layoutManager.scrollToPositionWithOffset(savedState.getInt(SAVED_POSITION), 0);
+        }
 
         recycler = new RecyclerView(getActivity());
         recycler.setLayoutParams(new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT));
@@ -45,29 +58,28 @@ public class WebtoonReader extends BaseReader {
 
         decoderSubscription = getReaderActivity().getPreferences().imageDecoder()
                 .asObservable()
-                .doOnNext(this::setRegionDecoderClass)
+                .doOnNext(this::setDecoderClass)
                 .skip(1)
                 .distinctUntilChanged()
-                .subscribe(v -> adapter.notifyDataSetChanged());
+                .subscribe(v -> recycler.setAdapter(adapter));
 
-        gestureDetector = new GestureDetector(getActivity(), new SimpleOnGestureListener() {
+        gestureDetector = new GestureDetector(recycler.getContext(), new SimpleOnGestureListener() {
             @Override
             public boolean onSingleTapConfirmed(MotionEvent e) {
-                getReaderActivity().onCenterSingleTap();
+                final float positionX = e.getX();
+
+                if (positionX < recycler.getWidth() * LEFT_REGION) {
+                    moveToPrevious();
+                } else if (positionX > recycler.getWidth() * RIGHT_REGION) {
+                    moveToNext();
+                } else {
+                    getReaderActivity().onCenterSingleTap();
+                }
                 return true;
             }
-
-            @Override
-            public boolean onDown(MotionEvent e) {
-                // The only way I've found to allow panning. Double tap event (zoom) is lost
-                // but panning should be the most used one
-                return true;
-            }
-
         });
 
         setPages();
-
         return recycler;
     }
 
@@ -83,6 +95,14 @@ public class WebtoonReader extends BaseReader {
         super.onPause();
     }
 
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        int savedPosition = pages != null ?
+                pages.get(layoutManager.findFirstVisibleItemPosition()).getPageNumber() : 0;
+        outState.putInt(SAVED_POSITION, savedPosition);
+    }
+
     private void unsubscribeStatus() {
         if (subscription != null && !subscription.isUnsubscribed())
             subscription.unsubscribe();
@@ -90,15 +110,42 @@ public class WebtoonReader extends BaseReader {
 
     @Override
     public void setSelectedPage(int pageNumber) {
-        recycler.scrollToPosition(getPositionForPage(pageNumber));
+        recycler.scrollToPosition(pageNumber);
     }
 
     @Override
-    public void onPageListReady(List<Page> pages, int currentPage) {
-        if (this.pages != pages) {
-            this.pages = pages;
-            if (isResumed()) {
-                setPages();
+    public void moveToNext() {
+        recycler.smoothScrollBy(0, scrollDistance);
+    }
+
+    @Override
+    public void moveToPrevious() {
+        recycler.smoothScrollBy(0, -scrollDistance);
+    }
+
+    @Override
+    public void onSetChapter(Chapter chapter, Page currentPage) {
+        pages = new ArrayList<>(chapter.getPages());
+        // Restoring current page is not supported. It's getting weird scrolling jumps
+        // this.currentPage = currentPage;
+
+        // This method can be called before the view is created
+        if (recycler != null) {
+            setPages();
+        }
+    }
+
+    @Override
+    public void onAppendChapter(Chapter chapter) {
+        int insertStart = pages.size();
+        pages.addAll(chapter.getPages());
+
+        // This method can be called before the view is created
+        if (recycler != null) {
+            adapter.setPages(pages);
+            adapter.notifyItemRangeInserted(insertStart, chapter.getPages().size());
+            if (subscription != null && subscription.isUnsubscribed()) {
+                observeStatus(insertStart);
             }
         }
     }
@@ -109,6 +156,7 @@ public class WebtoonReader extends BaseReader {
             recycler.clearOnScrollListeners();
             adapter.setPages(pages);
             recycler.setAdapter(adapter);
+            updatePageNumber();
             setScrollListener();
             observeStatus(0);
         }
@@ -118,22 +166,19 @@ public class WebtoonReader extends BaseReader {
         recycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
-                super.onScrolled(recyclerView, dx, dy);
-
-                currentPage = layoutManager.findLastVisibleItemPosition();
-                updatePageNumber();
+                int page = layoutManager.findLastVisibleItemPosition();
+                if (page != currentPage) {
+                    onPageChanged(page);
+                }
             }
         });
     }
 
-    @Override
-    public boolean onImageTouch(MotionEvent motionEvent) {
-        return gestureDetector.onTouchEvent(motionEvent);
-    }
-
     private void observeStatus(int position) {
-        if (position == pages.size())
+        if (position == pages.size()) {
+            unsubscribeStatus();
             return;
+        }
 
         final Page page = pages.get(position);
 

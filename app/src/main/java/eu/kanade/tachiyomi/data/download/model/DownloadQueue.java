@@ -43,11 +43,11 @@ public class DownloadQueue extends ArrayList<Download> {
     }
 
     public Observable<Download> getStatusObservable() {
-        return statusSubject;
+        return statusSubject.onBackpressureBuffer();
     }
 
     public Observable<Download> getProgressObservable() {
-        return statusSubject
+        return statusSubject.onBackpressureBuffer()
                 .startWith(getActiveDownloads())
                 .flatMap(download -> {
                     if (download.getStatus() == Download.DOWNLOADING) {

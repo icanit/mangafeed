@@ -4,6 +4,11 @@ import android.content.Context;
 import android.os.Bundle;
 import android.text.TextUtils;
 
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
+
+import java.util.List;
+
 import javax.inject.Inject;
 
 import eu.kanade.tachiyomi.R;
@@ -14,7 +19,6 @@ import eu.kanade.tachiyomi.data.mangasync.MangaSyncManager;
 import eu.kanade.tachiyomi.data.mangasync.services.MyAnimeList;
 import eu.kanade.tachiyomi.event.MangaEvent;
 import eu.kanade.tachiyomi.ui.base.presenter.BasePresenter;
-import eu.kanade.tachiyomi.util.EventBusHook;
 import eu.kanade.tachiyomi.util.ToastUtil;
 import rx.Observable;
 import rx.android.schedulers.AndroidSchedulers;
@@ -36,27 +40,23 @@ public class MyAnimeListPresenter extends BasePresenter<MyAnimeListFragment> {
     private static final int GET_SEARCH_RESULTS = 2;
     private static final int REFRESH = 3;
 
+    private static final String PREFIX_MY = "my:";
+
     @Override
     protected void onCreate(Bundle savedState) {
         super.onCreate(savedState);
 
-        if (savedState != null) {
-            onProcessRestart();
-        }
-
         myAnimeList = syncManager.getMyAnimeList();
 
-        restartableLatestCache(GET_MANGA_SYNC,
+        startableLatestCache(GET_MANGA_SYNC,
                 () -> db.getMangaSync(manga, myAnimeList).asRxObservable()
                         .doOnNext(mangaSync -> this.mangaSync = mangaSync)
                         .subscribeOn(Schedulers.io())
                         .observeOn(AndroidSchedulers.mainThread()),
                 MyAnimeListFragment::setMangaSync);
 
-        restartableLatestCache(GET_SEARCH_RESULTS,
-                () -> myAnimeList.search(query)
-                        .subscribeOn(Schedulers.io())
-                        .observeOn(AndroidSchedulers.mainThread()),
+        startableLatestCache(GET_SEARCH_RESULTS,
+                this::getSearchResultsObservable,
                 (view, results) -> {
                     view.setSearchResults(results);
                 }, (view, error) -> {
@@ -64,7 +64,7 @@ public class MyAnimeListPresenter extends BasePresenter<MyAnimeListFragment> {
                     view.setSearchResultsError();
                 });
 
-        restartableFirst(REFRESH,
+        startableFirst(REFRESH,
                 () -> myAnimeList.getList()
                         .flatMap(myList -> {
                             for (MangaSync myManga : myList) {
@@ -84,16 +84,10 @@ public class MyAnimeListPresenter extends BasePresenter<MyAnimeListFragment> {
 
     }
 
-    private void onProcessRestart() {
-        stop(GET_MANGA_SYNC);
-        stop(GET_SEARCH_RESULTS);
-        stop(REFRESH);
-    }
-
     @Override
     protected void onTakeView(MyAnimeListFragment view) {
         super.onTakeView(view);
-        registerForStickyEvents();
+        registerForEvents();
     }
 
     @Override
@@ -102,10 +96,26 @@ public class MyAnimeListPresenter extends BasePresenter<MyAnimeListFragment> {
         super.onDropView();
     }
 
-    @EventBusHook
-    public void onEventMainThread(MangaEvent event) {
+    @Subscribe(sticky = true, threadMode = ThreadMode.MAIN)
+    public void onEvent(MangaEvent event) {
         this.manga = event.manga;
         start(GET_MANGA_SYNC);
+    }
+
+    private Observable<List<MangaSync>> getSearchResultsObservable() {
+        Observable<List<MangaSync>> observable;
+        if (query.startsWith(PREFIX_MY)) {
+            String realQuery = query.substring(PREFIX_MY.length()).toLowerCase().trim();
+            observable = myAnimeList.getList()
+                    .flatMap(Observable::from)
+                    .filter(manga -> manga.title.toLowerCase().contains(realQuery))
+                    .toList();
+        } else {
+            observable = myAnimeList.search(query);
+        }
+        return observable
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread());
     }
 
     private void updateRemote() {

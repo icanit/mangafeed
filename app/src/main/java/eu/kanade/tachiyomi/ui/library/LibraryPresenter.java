@@ -3,13 +3,16 @@ package eu.kanade.tachiyomi.ui.library;
 import android.os.Bundle;
 import android.util.Pair;
 
+import org.greenrobot.eventbus.EventBus;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import javax.inject.Inject;
 
-import de.greenrobot.event.EventBus;
 import eu.kanade.tachiyomi.data.cache.CoverCache;
 import eu.kanade.tachiyomi.data.database.DatabaseHelper;
 import eu.kanade.tachiyomi.data.database.models.Category;
@@ -21,24 +24,26 @@ import eu.kanade.tachiyomi.event.LibraryMangasEvent;
 import eu.kanade.tachiyomi.ui.base.presenter.BasePresenter;
 import rx.Observable;
 import rx.android.schedulers.AndroidSchedulers;
+import rx.subjects.BehaviorSubject;
 
 public class LibraryPresenter extends BasePresenter<LibraryFragment> {
 
+    private static final int GET_LIBRARY = 1;
+    protected List<Category> categories;
+    protected List<Manga> selectedMangas;
+    protected BehaviorSubject<String> searchSubject;
     @Inject DatabaseHelper db;
     @Inject PreferencesHelper preferences;
     @Inject CoverCache coverCache;
     @Inject SourceManager sourceManager;
-
-    protected List<Category> categories;
-    protected List<Manga> selectedMangas;
-
-    private static final int GET_LIBRARY = 1;
 
     @Override
     protected void onCreate(Bundle savedState) {
         super.onCreate(savedState);
 
         selectedMangas = new ArrayList<>();
+
+        searchSubject = BehaviorSubject.create();
 
         restartableLatestCache(GET_LIBRARY,
                 this::getLibraryObservable,
@@ -50,9 +55,9 @@ public class LibraryPresenter extends BasePresenter<LibraryFragment> {
     }
 
     @Override
-    protected void onDestroy() {
+    protected void onDropView() {
         EventBus.getDefault().removeStickyEvent(LibraryMangasEvent.class);
-        super.onDestroy();
+        super.onDropView();
     }
 
     @Override
@@ -134,5 +139,19 @@ public class LibraryPresenter extends BasePresenter<LibraryFragment> {
         }
 
         db.setMangaCategories(mc, mangas);
+    }
+
+    /**
+     * Update cover with local file
+     */
+    public boolean editCoverWithLocalFile(File file, Manga manga) throws IOException {
+        if (!manga.initialized)
+            return false;
+
+        if (manga.favorite) {
+            coverCache.copyToLocalCache(manga.thumbnail_url, file);
+            return true;
+        }
+        return false;
     }
 }

@@ -20,14 +20,12 @@ import timber.log.Timber;
 
 public class DownloadPresenter extends BasePresenter<DownloadFragment> {
 
+    public final static int GET_DOWNLOAD_QUEUE = 1;
     @Inject DownloadManager downloadManager;
-
     private DownloadQueue downloadQueue;
     private Subscription statusSubscription;
     private Subscription pageProgressSubscription;
     private HashMap<Download, Subscription> progressSubscriptions;
-
-    public final static int GET_DOWNLOAD_QUEUE = 1;
 
     @Override
     protected void onCreate(Bundle savedState) {
@@ -57,6 +55,7 @@ public class DownloadPresenter extends BasePresenter<DownloadFragment> {
                 }));
 
         add(pageProgressSubscription = downloadQueue.getProgressObservable()
+                .onBackpressureBuffer()
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(view::updateDownloadedPages));
     }
@@ -122,4 +121,8 @@ public class DownloadPresenter extends BasePresenter<DownloadFragment> {
         remove(statusSubscription);
     }
 
+    public void clearQueue() {
+        downloadQueue.clear();
+        start(GET_DOWNLOAD_QUEUE);
+    }
 }

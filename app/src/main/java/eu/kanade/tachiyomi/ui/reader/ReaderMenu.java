@@ -2,11 +2,13 @@ package eu.kanade.tachiyomi.ui.reader;
 
 import android.app.Dialog;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.support.v7.widget.Toolbar;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.view.animation.Animation;
@@ -42,9 +44,10 @@ public class ReaderMenu {
     @Bind(R.id.page_seeker) SeekBar seekBar;
     @Bind(R.id.total_pages) TextView totalPages;
     @Bind(R.id.lock_orientation) ImageButton lockOrientation;
+    @Bind(R.id.reader_zoom_selector) ImageButton zoomSelector;
+    @Bind(R.id.reader_scale_type_selector) ImageButton scaleTypeSelector;
     @Bind(R.id.reader_selector) ImageButton readerSelector;
     @Bind(R.id.reader_extra_settings) ImageButton extraSettings;
-    @Bind(R.id.reader_brightness) ImageButton brightnessSettings;
 
     private MenuItem nextChapterBtn;
     private MenuItem prevChapterBtn;
@@ -56,7 +59,6 @@ public class ReaderMenu {
 
     @State boolean showing;
     private PopupWindow settingsPopup;
-    private PopupWindow brightnessPopup;
     private boolean inverted;
 
     private DecimalFormat decimalFormat;
@@ -70,10 +72,10 @@ public class ReaderMenu {
         bottomMenu.setOnTouchListener((v, event) -> true);
 
         seekBar.setOnSeekBarChangeListener(new PageSeekBarChangeListener());
-        decimalFormat = new DecimalFormat("#.##");
+        decimalFormat = new DecimalFormat("#.###");
         inverted = false;
 
-        initializeOptions();
+        initializeMenu();
     }
 
     public void add(Subscription subscription) {
@@ -110,7 +112,6 @@ public class ReaderMenu {
         bottomMenu.startAnimation(bottomMenuAnimation);
 
         settingsPopup.dismiss();
-        brightnessPopup.dismiss();
 
         showing = false;
     }
@@ -134,7 +135,7 @@ public class ReaderMenu {
         return true;
     }
 
-    public void onChapterReady(int numPages, Manga manga, Chapter chapter, int currentPageIndex) {
+    public void setActiveManga(Manga manga) {
         if (manga.viewer == ReaderActivity.RIGHT_TO_LEFT && !inverted) {
             // Invert the seekbar and textview fields for the right to left reader
             seekBar.setRotation(180);
@@ -144,14 +145,17 @@ public class ReaderMenu {
             // Don't invert again on chapter change
             inverted = true;
         }
+        activity.setToolbarTitle(manga.title);
+    }
 
+    public void setActiveChapter(Chapter chapter, int currentPageIndex) {
         // Set initial values
+        int numPages = chapter.getPages().size();
         totalPages.setText("" + numPages);
         currentPage.setText("" + (currentPageIndex + 1));
-        seekBar.setProgress(currentPageIndex);
         seekBar.setMax(numPages - 1);
+        seekBar.setProgress(currentPageIndex);
 
-        activity.setToolbarTitle(manga.title);
         activity.setToolbarSubtitle(chapter.chapter_number != -1 ?
                 activity.getString(R.string.chapter_subtitle,
                         decimalFormat.format(chapter.chapter_number)) :
@@ -175,25 +179,63 @@ public class ReaderMenu {
         if (nextChapterBtn != null) nextChapterBtn.setVisible(nextChapter != null);
     }
 
-    private void initializeOptions() {
-        // Orientation changes
-        add(preferences.lockOrientation().asObservable()
-                .subscribe(locked -> {
-                    int resourceId = !locked ? R.drawable.ic_screen_rotation :
-                            activity.getResources().getConfiguration().orientation == 1 ?
+    @SuppressWarnings("ConstantConditions")
+    private void initializeMenu() {
+        // Orientation selector
+        add(preferences.rotation().asObservable()
+                .subscribe(value -> {
+                    boolean isPortrait = activity.getResources().getConfiguration()
+                            .orientation == Configuration.ORIENTATION_PORTRAIT;
+                    int resourceId = value == 1 ? R.drawable.ic_screen_rotation : isPortrait ?
                                     R.drawable.ic_screen_lock_portrait :
                                     R.drawable.ic_screen_lock_landscape;
 
                     lockOrientation.setImageResource(resourceId);
                 }));
 
-        lockOrientation.setOnClickListener(v ->
-                preferences.lockOrientation().set(!preferences.lockOrientation().get()));
+        lockOrientation.setOnClickListener(v -> {
+            showImmersiveDialog(new MaterialDialog.Builder(activity)
+                    .title(R.string.pref_rotation_type)
+                    .items(R.array.rotation_type)
+                    .itemsCallbackSingleChoice(preferences.rotation().get() - 1,
+                            (d, itemView, which, text) -> {
+                                preferences.rotation().set(which + 1);
+                                return true;
+                            })
+                    .build());
+        });
+
+        // Zoom selector
+        zoomSelector.setOnClickListener(v -> {
+            showImmersiveDialog(new MaterialDialog.Builder(activity)
+                    .title(R.string.pref_zoom_start)
+                    .items(R.array.zoom_start)
+                    .itemsCallbackSingleChoice(preferences.zoomStart().get() - 1,
+                            (d, itemView, which, text) -> {
+                                preferences.zoomStart().set(which + 1);
+                                return true;
+                            })
+                    .build());
+        });
+
+        // Scale type selector
+        scaleTypeSelector.setOnClickListener(v -> {
+            showImmersiveDialog(new MaterialDialog.Builder(activity)
+                    .title(R.string.pref_image_scale_type)
+                    .items(R.array.image_scale_type)
+                    .itemsCallbackSingleChoice(preferences.imageScaleType().get() - 1,
+                            (d, itemView, which, text) -> {
+                                preferences.imageScaleType().set(which + 1);
+                                return true;
+                            })
+                    .build());
+        });
 
         // Reader selector
         readerSelector.setOnClickListener(v -> {
             final Manga manga = activity.getPresenter().getManga();
             showImmersiveDialog(new MaterialDialog.Builder(activity)
+                    .title(R.string.pref_viewer_type)
                     .items(R.array.viewers_selector)
                     .itemsCallbackSingleChoice(manga.viewer,
                             (d, itemView, which, text) -> {
@@ -215,17 +257,6 @@ public class ReaderMenu {
                 settingsPopup.dismiss();
         });
 
-        // Brightness popup
-        final View brightnessView = activity.getLayoutInflater().inflate(R.layout.reader_brightness, null);
-        brightnessPopup = new BrightnessPopupWindow(brightnessView);
-
-        brightnessSettings.setOnClickListener(v -> {
-            if (!brightnessPopup.isShowing())
-                brightnessPopup.showAtLocation(brightnessSettings,
-                        Gravity.BOTTOM | Gravity.LEFT, 0, bottomMenu.getHeight());
-            else
-                brightnessPopup.dismiss();
-        });
     }
 
     private void showImmersiveDialog(Dialog dialog) {
@@ -247,8 +278,11 @@ public class ReaderMenu {
         @Bind(R.id.hide_status_bar) CheckBox hideStatusBar;
         @Bind(R.id.keep_screen_on) CheckBox keepScreenOn;
         @Bind(R.id.reader_theme) CheckBox readerTheme;
+        @Bind(R.id.image_decoder_container) ViewGroup imageDecoderContainer;
         @Bind(R.id.image_decoder) TextView imageDecoder;
         @Bind(R.id.image_decoder_initial) TextView imageDecoderInitial;
+        @Bind(R.id.custom_brightness) CheckBox customBrightness;
+        @Bind(R.id.brightness_seekbar) SeekBar brightnessSeekbar;
 
         public SettingsPopupWindow(View view) {
             super(view, LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
@@ -257,6 +291,7 @@ public class ReaderMenu {
             initializePopupMenu();
         }
 
+        @SuppressWarnings("ConstantConditions")
         private void initializePopupMenu() {
             // Load values from preferences
             enableTransitions.setChecked(preferences.enableTransitions().get());
@@ -282,7 +317,7 @@ public class ReaderMenu {
             readerTheme.setOnCheckedChangeListener((view, isChecked) ->
                     preferences.readerTheme().set(isChecked ? 1 : 0));
 
-            imageDecoder.setOnClickListener(v -> {
+            imageDecoderContainer.setOnClickListener(v -> {
                 showImmersiveDialog(new MaterialDialog.Builder(activity)
                         .title(R.string.pref_image_decoder)
                         .items(R.array.image_decoders)
@@ -294,6 +329,21 @@ public class ReaderMenu {
                                 })
                         .build());
             });
+
+            add(preferences.customBrightness()
+                    .asObservable()
+                    .subscribe(isEnabled -> {
+                        customBrightness.setChecked(isEnabled);
+                        brightnessSeekbar.setEnabled(isEnabled);
+                    }));
+
+            customBrightness.setOnCheckedChangeListener((view, isChecked) ->
+                    preferences.customBrightness().set(isChecked));
+
+            brightnessSeekbar.setMax(100);
+            brightnessSeekbar.setProgress(Math.round(
+                    preferences.customBrightnessValue().get() * brightnessSeekbar.getMax()));
+            brightnessSeekbar.setOnSeekBarChangeListener(new BrightnessSeekBarChangeListener());
         }
 
         private void setDecoderInitial(int decoder) {
@@ -314,43 +364,12 @@ public class ReaderMenu {
 
     }
 
-    class BrightnessPopupWindow extends PopupWindow {
-
-        @Bind(R.id.custom_brightness) CheckBox customBrightness;
-        @Bind(R.id.brightness_seekbar) SeekBar brightnessSeekbar;
-
-        public BrightnessPopupWindow(View view) {
-            super(view, LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-            setAnimationStyle(R.style.reader_brightness_popup_animation);
-            ButterKnife.bind(this, view);
-            initializePopupMenu();
-        }
-
-        private void initializePopupMenu() {
-            add(preferences.customBrightness()
-                    .asObservable()
-                    .subscribe(isEnabled -> {
-                        customBrightness.setChecked(isEnabled);
-                        brightnessSeekbar.setEnabled(isEnabled);
-                    }));
-
-            customBrightness.setOnCheckedChangeListener((view, isChecked) ->
-                    preferences.customBrightness().set(isChecked));
-
-            brightnessSeekbar.setMax(100);
-            brightnessSeekbar.setProgress(Math.round(
-                    preferences.customBrightnessValue().get() * brightnessSeekbar.getMax()));
-            brightnessSeekbar.setOnSeekBarChangeListener(new BrightnessSeekBarChangeListener());
-        }
-
-    }
-
     class PageSeekBarChangeListener implements SeekBar.OnSeekBarChangeListener {
 
         @Override
         public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
             if (fromUser) {
-                activity.setSelectedPage(progress);
+                activity.gotoPageInCurrentChapter(progress);
             }
         }
 

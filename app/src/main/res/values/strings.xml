@@ -28,6 +28,7 @@
     <string name="action_edit_categories">Edit categories</string>
     <string name="action_rename_category">Rename category</string>
     <string name="action_move_category">Move to categories</string>
+    <string name="action_edit_cover">Edit the cover picture</string>
     <string name="action_sort_up">Sort up</string>
     <string name="action_sort_down">Sort down</string>
     <string name="action_show_unread">Unread</string>
@@ -35,11 +36,12 @@
     <string name="action_next_unread">Next unread</string>
     <string name="action_start">Start</string>
     <string name="action_stop">Stop</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_clear">Clear</string>
     <string name="action_previous_chapter">Previous chapter</string>
     <string name="action_next_chapter">Next chapter</string>
     <string name="action_retry">Retry</string>
     <string name="action_display_mode">Change display mode</string>
-
 
     <!-- Buttons -->
     <string name="button_ok">OK</string>
@@ -65,8 +67,8 @@
     <string name="portrait">Portrait</string>
     <string name="landscape">Landscape</string>
     <string name="default_columns">Default</string>
-    <string name="pref_library_update_interval">Library update period</string>
-    <string name="pref_update_only_non_completed">Only update uncomplete manga</string>
+    <string name="pref_library_update_interval">Library update frequency</string>
+    <string name="pref_update_only_non_completed">Only update incomplete manga</string>
     <string name="update_never">Manual</string>
     <string name="update_1hour">Hourly</string>
     <string name="update_2hour">Every 2 hours</string>
@@ -75,8 +77,8 @@
     <string name="update_12hour">Every 12 hours</string>
     <string name="update_24hour">Daily</string>
     <string name="update_48hour">Every 2 days</string>
-    <string name="pref_auto_update_manga_sync">Automatically update last chapter read in enabled services</string>
-    <string name="pref_ask_update_manga_sync">Ask for confirmation before updating</string>
+    <string name="pref_auto_update_manga_sync">Sync chapters after reading</string>
+    <string name="pref_ask_update_manga_sync">Confirm before updating</string>
 
       <!-- Reader section -->
     <string name="pref_hide_status_bar">Hide status bar</string>
@@ -84,6 +86,7 @@
     <string name="pref_enable_transitions">Enable transitions</string>
     <string name="pref_show_page_number">Show page number</string>
     <string name="pref_custom_brightness">Use custom brightness</string>
+    <string name="pref_seamless_mode">Seamless chapter transitions</string>
     <string name="pref_keep_screen_on">Keep screen on</string>
     <string name="pref_reader_theme">Background color</string>
     <string name="white_theme">White</string>
@@ -93,10 +96,28 @@
     <string name="left_to_right_viewer">Left to right</string>
     <string name="right_to_left_viewer">Right to left</string>
     <string name="vertical_viewer">Vertical</string>
-    <string name="webtoon_viewer">Webtoon (experimental)</string>
+    <string name="webtoon_viewer">Webtoon</string>
     <string name="pref_image_decoder">Image decoder</string>
     <string name="rapid_decoder">Rapid</string>
     <string name="skia_decoder">Skia</string>
+    <string name="pref_image_scale_type">Scale type</string>
+    <string name="scale_type_fit_screen">Fit screen</string>
+    <string name="scale_type_stretch">Stretch</string>
+    <string name="scale_type_fit_width">Fit width</string>
+    <string name="scale_type_fit_height">Fit height</string>
+    <string name="scale_type_original_size">Original size</string>
+    <string name="scale_type_smart_fit">Smart fit</string>
+    <string name="pref_zoom_start">Zoom start position</string>
+    <string name="zoom_start_automatic">Automatic</string>
+    <string name="zoom_start_left">Left</string>
+    <string name="zoom_start_right">Right</string>
+    <string name="zoom_start_center">Center</string>
+    <string name="pref_rotation_type">Rotation</string>
+    <string name="rotation_free">Free</string>
+    <string name="rotation_lock">Lock</string>
+    <string name="rotation_force_portrait">Force portrait</string>
+    <string name="rotation_force_landscape">Force landscape</string>
+
 
       <!-- Downloads section -->
     <string name="pref_download_directory">Downloads directory</string>
@@ -118,7 +139,7 @@
 
     <!-- ACRA -->
     <string name="pref_enable_acra">Send crash reports</string>
-    <string name="pref_acra_summary">Helps fixing bugs. No sensitive data is sent</string>
+    <string name="pref_acra_summary">Helps fix any bugs. No sensitive data will be sent</string>
 
 
     <!-- Login dialog -->
@@ -136,33 +157,39 @@
     <string name="library_selection_title">Selected</string>
 
     <!-- Catalogue fragment -->
-    <string name="source_requires_login">This source requires login</string>
+    <string name="source_requires_login">This source requires you to log in</string>
     <string name="select_source">Select a source</string>
 
     <!-- Manga info fragment -->
     <string name="manga_detail_tab">Info</string>
-    <string name="author">Author</string>
-    <string name="chapters">Chapters</string>
-    <string name="genres">Genres</string>
-    <string name="source">Source</string>
-    <string name="artist">Artist</string>
     <string name="description">Description</string>
-    <string name="status">Status</string>
     <string name="ongoing">Ongoing</string>
     <string name="unknown">Unknown</string>
     <string name="licensed">Licensed</string>
     <string name="add_to_library">Add to library</string>
     <string name="remove_from_library">Remove from library</string>
+    <string name="manga_info_author_label">Author</string>
+    <string name="manga_info_artist_label">Artist</string>
+    <string name="manga_info_chapters_label">Chapters</string>
+    <string name="manga_info_status_label">Status</string>
+    <string name="manga_info_source_label">Source</string>
+    <string name="manga_info_genres_label">Genres</string>
 
     <!-- Manga chapters fragment -->
     <string name="manga_chapters_tab">Chapters</string>
     <string name="manga_chapter_no_title">No title</string>
+    <string name="display_mode_chapter">Chapter %1$s</string>
     <string name="chapter_downloaded">Downloaded</string>
     <string name="chapter_queued">Queued</string>
     <string name="chapter_downloading">Downloading</string>
     <string name="chapter_downloading_progress">Downloading (%1$d/%2$d)</string>
     <string name="chapter_error">Error</string>
     <string name="fetch_chapters_error">Error while fetching chapters</string>
+    <string name="show_title">Show title</string>
+    <string name="show_chapter_number">Show chapter number</string>
+    <string name="manga_download">Download</string>
+    <string name="download_all">Download all</string>
+    <string name="download_unread">Download unread</string>
 
     <!-- MyAnimeList fragment -->
     <string name="reading">Reading</string>
@@ -172,12 +199,15 @@
     <string name="plan_to_read">Plan to read</string>
     <string name="score">Score</string>
     <string name="title_hint">Title…</string>
+    <string name="status">Status</string>
+    <string name="chapters">Chapters</string>
+
 
     <!-- Reader activity -->
     <string name="downloading">Downloading…</string>
     <string name="download_progress">Downloaded %1$d%%</string>
     <string name="chapter_progress">Page: %1$d</string>
-    <string name="page_list_error">Error fetching page list. Is network available?</string>
+    <string name="page_list_error">Error fetching page list. Check your internet connection.</string>
     <string name="chapter_subtitle">Chapter %1$s</string>
     <string name="no_next_chapter">Next chapter not found</string>
     <string name="no_previous_chapter">Previous chapter not found</string>
@@ -185,14 +215,30 @@
     <string name="confirm_update_manga_sync">Update last chapter read in enabled services to %1$d?</string>
 
     <!-- Downloads activity and service -->
-    <string name="download_queue_error">An error occurred while downloading chapters. Restart it from the downloads section</string>
+    <string name="download_queue_error">An error occurred while downloading chapters. You can try again in the downloads section</string>
 
     <!-- Library update service notifications -->
     <string name="notification_update_progress">Update progress: %1$d/%2$d</string>
     <string name="notification_update_completed">Update completed</string>
     <string name="notification_update_error">An unexpected error occurred while updating the library</string>
     <string name="notification_no_new_chapters">No new chapters found</string>
-    <string name="notification_new_chapters">Found new chapters for:</string>
-    <string name="notification_manga_update_failed">Failed updating manga:</string>
+    <string name="notification_new_chapters">New chapters found for:</string>
+    <string name="notification_manga_update_failed">Failed to update manga:</string>
+    <string name="notification_first_add_to_library">Please add the manga to your library before doing this</string>
+
+    <!-- File Picker Titles -->
+    <string name="file_select_cover">Select cover image</string>
+
+    <!--UpdateCheck-->
+    <string name="update_check_title">New update available!</string>
+    <string name="update_check_confirm">Download</string>
+    <string name="update_check_ignore">Ignore</string>
+    <string name="update_check_no_new_updates">No new updates available</string>
+    <string name="update_check_download_started">Download Started</string>
+    <string name="update_check_look_for_updates">Looking for updates</string>
+
+    <!--Content Description-->
+    <string name="description_backdrop">Backdrop image of selected manga</string>
+    <string name="description_cover">Cover of selected manga</string>
 
 </resources>

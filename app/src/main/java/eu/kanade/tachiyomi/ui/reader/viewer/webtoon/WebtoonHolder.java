@@ -4,13 +4,13 @@ import android.support.v7.widget.RecyclerView;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.animation.Animation;
-import android.view.animation.AnimationUtils;
 import android.widget.Button;
 import android.widget.ProgressBar;
 
 import com.davemorrissey.labs.subscaleview.ImageSource;
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
+
+import java.io.File;
 
 import butterknife.Bind;
 import butterknife.ButterKnife;
@@ -24,7 +24,6 @@ public class WebtoonHolder extends RecyclerView.ViewHolder {
     @Bind(R.id.progress) ProgressBar progressBar;
     @Bind(R.id.retry_button) Button retryButton;
 
-    private Animation fadeInAnimation;
     private Page page;
     private WebtoonAdapter adapter;
 
@@ -33,27 +32,38 @@ public class WebtoonHolder extends RecyclerView.ViewHolder {
         this.adapter = adapter;
         ButterKnife.bind(this, view);
 
-        fadeInAnimation = AnimationUtils.loadAnimation(view.getContext(), R.anim.fade_in);
-
         imageView.setParallelLoadingEnabled(true);
+        imageView.setMaxBitmapDimensions(adapter.getReaderActivity().getMaxBitmapSize());
         imageView.setDoubleTapZoomStyle(SubsamplingScaleImageView.ZOOM_FOCUS_FIXED);
         imageView.setPanLimit(SubsamplingScaleImageView.PAN_LIMIT_INSIDE);
-        imageView.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CENTER_INSIDE);
+        imageView.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_FIT_WIDTH);
+        imageView.setMaxScale(10);
+        imageView.setRegionDecoderClass(adapter.getReader().getRegionDecoderClass());
+        imageView.setBitmapDecoderClass(adapter.getReader().getBitmapDecoderClass());
+        imageView.setVerticalScrollingParent(true);
         imageView.setOnTouchListener(touchListener);
         imageView.setOnImageEventListener(new SubsamplingScaleImageView.DefaultOnImageEventListener() {
             @Override
             public void onImageLoaded() {
-                imageView.startAnimation(fadeInAnimation);
+                // When the image is loaded, reset the minimum height to avoid gaps
+                container.setMinimumHeight(0);
             }
         });
-        progressBar.setMinimumHeight(view.getResources().getDisplayMetrics().heightPixels);
+
+        // Avoid to create a lot of view holders taking twice the screen height,
+        // saving memory and a possible OOM. When the first image is loaded in this holder,
+        // the minimum size will be removed.
+        // Doing this we get sequential holder instantiation.
+        container.setMinimumHeight(view.getResources().getDisplayMetrics().heightPixels * 2);
+
+        // Leave some space between progress bars
+        progressBar.setMinimumHeight(300);
 
         container.setOnTouchListener(touchListener);
         retryButton.setOnTouchListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_UP) {
                 if (page != null)
                     adapter.retryPage(page);
-                return true;
             }
             return true;
         });
@@ -90,8 +100,14 @@ public class WebtoonHolder extends RecyclerView.ViewHolder {
         setErrorButtonVisible(false);
         setProgressVisible(false);
         setImageVisible(true);
-        imageView.setRegionDecoderClass(adapter.getReader().getRegionDecoderClass());
-        imageView.setImage(ImageSource.uri(page.getImagePath()));
+
+        File imagePath = new File(page.getImagePath());
+        if (imagePath.exists()) {
+            imageView.setImage(ImageSource.uri(page.getImagePath()));
+        } else {
+            page.setStatus(Page.ERROR);
+            onError();
+        }
     }
 
     private void onError() {

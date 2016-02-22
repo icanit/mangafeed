@@ -42,10 +42,12 @@ public class PreferencesHelper {
         if (getDownloadsDirectory().equals(defaultDownloadsDir.getAbsolutePath()) &&
                 !defaultDownloadsDir.exists()) {
             defaultDownloadsDir.mkdirs();
-            try {
-                new File(defaultDownloadsDir, ".nomedia").createNewFile();
-            } catch (IOException e) { /* Ignore */ }
         }
+
+        // Don't display downloaded chapters in gallery apps creating a ".nomedia" file
+        try {
+            new File(getDownloadsDirectory(), ".nomedia").createNewFile();
+        } catch (IOException e) { /* Ignore */ }
     }
 
     private String getKey(int keyResource) {
@@ -56,8 +58,8 @@ public class PreferencesHelper {
         prefs.edit().clear().apply();
     }
 
-    public Preference<Boolean> lockOrientation() {
-        return rxPrefs.getBoolean(getKey(R.string.pref_lock_orientation_key), true);
+    public Preference<Integer> rotation() {
+        return rxPrefs.getInteger(getKey(R.string.pref_rotation_type_key), 1);
     }
 
     public Preference<Boolean> enableTransitions() {
@@ -88,6 +90,22 @@ public class PreferencesHelper {
         return prefs.getInt(getKey(R.string.pref_default_viewer_key), 1);
     }
 
+    public Preference<Integer> imageScaleType() {
+        return rxPrefs.getInteger(getKey(R.string.pref_image_scale_type_key), 1);
+    }
+
+    public Preference<Integer> imageDecoder() {
+        return rxPrefs.getInteger(getKey(R.string.pref_image_decoder_key), 0);
+    }
+
+    public Preference<Integer> zoomStart() {
+        return rxPrefs.getInteger(getKey(R.string.pref_zoom_start_key), 1);
+    }
+
+    public Preference<Integer> readerTheme() {
+        return rxPrefs.getInteger(getKey(R.string.pref_reader_theme_key), 0);
+    }
+
     public Preference<Integer> portraitColumns() {
         return rxPrefs.getInteger(getKey(R.string.pref_library_columns_portrait_key), 0);
     }
@@ -108,12 +126,12 @@ public class PreferencesHelper {
         return prefs.getBoolean(getKey(R.string.pref_ask_update_manga_sync_key), false);
     }
 
-    public Preference<Integer> imageDecoder() {
-        return rxPrefs.getInteger(getKey(R.string.pref_image_decoder_key), 0);
+    public Preference<Integer> lastUsedCatalogueSource() {
+        return rxPrefs.getInteger(getKey(R.string.pref_last_catalogue_source_key), -1);
     }
 
-    public Preference<Integer> readerTheme() {
-        return rxPrefs.getInteger(getKey(R.string.pref_reader_theme_key), 0);
+    public boolean seamlessMode() {
+        return prefs.getBoolean(getKey(R.string.pref_seamless_mode_key), true);
     }
 
     public Preference<Boolean> catalogueAsList() {
@@ -170,6 +188,10 @@ public class PreferencesHelper {
     public static int getLibraryUpdateInterval(Context context) {
         return PreferenceManager.getDefaultSharedPreferences(context).getInt(
                 context.getString(R.string.pref_library_update_interval_key), 0);
+    }
+
+    public Preference<Integer> libraryUpdateInterval() {
+        return rxPrefs.getInteger(getKey(R.string.pref_library_update_interval_key), 0);
     }
 
 }

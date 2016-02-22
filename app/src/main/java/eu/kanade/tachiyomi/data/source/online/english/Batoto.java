@@ -2,11 +2,8 @@ package eu.kanade.tachiyomi.data.source.online.english;
 
 import android.content.Context;
 import android.net.Uri;
+import android.text.Html;
 import android.text.TextUtils;
-
-import com.squareup.okhttp.FormEncodingBuilder;
-import com.squareup.okhttp.Headers;
-import com.squareup.okhttp.Response;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -30,23 +27,29 @@ import java.util.regex.Pattern;
 
 import eu.kanade.tachiyomi.data.database.models.Chapter;
 import eu.kanade.tachiyomi.data.database.models.Manga;
-import eu.kanade.tachiyomi.data.source.SourceManager;
+import eu.kanade.tachiyomi.data.network.ReqKt;
 import eu.kanade.tachiyomi.data.source.base.LoginSource;
 import eu.kanade.tachiyomi.data.source.model.MangasPage;
 import eu.kanade.tachiyomi.data.source.model.Page;
 import eu.kanade.tachiyomi.util.Parser;
+import okhttp3.FormBody;
+import okhttp3.Headers;
+import okhttp3.Request;
+import okhttp3.Response;
 import rx.Observable;
 
 public class Batoto extends LoginSource {
 
     public static final String NAME = "Batoto (EN)";
     public static final String BASE_URL = "http://bato.to";
-    public static final String POPULAR_MANGAS_URL = BASE_URL + "/search_ajax?order_cond=views&order=desc&p=%d";
+    public static final String POPULAR_MANGAS_URL = BASE_URL + "/search_ajax?order_cond=views&order=desc&p=%s";
     public static final String SEARCH_URL = BASE_URL + "/search_ajax?name=%s&p=%s";
-    public static final String CHAPTER_URL = "/areader?id=%s&p=1";
+    public static final String CHAPTER_URL = BASE_URL + "/areader?id=%s&p=1";
     public static final String PAGE_URL = BASE_URL + "/areader?id=%s&p=%s";
-    public static final String MANGA_URL = "/comic_pop?id=%s";
+    public static final String MANGA_URL = BASE_URL + "/comic_pop?id=%s";
     public static final String LOGIN_URL = BASE_URL + "/forums/index.php?app=core&module=global&section=login";
+
+    public static final Pattern staffNotice = Pattern.compile("=+Batoto Staff Notice=+([^=]+)==+", Pattern.CASE_INSENSITIVE);
 
     private Pattern datePattern;
     private Map<String, Integer> dateFields;
@@ -69,11 +72,6 @@ public class Batoto extends LoginSource {
     @Override
     public String getName() {
         return NAME;
-    }
-
-    @Override
-    public int getId() {
-        return SourceManager.BATOTO;
     }
 
     @Override
@@ -100,23 +98,24 @@ public class Batoto extends LoginSource {
     }
 
     @Override
-    protected String overrideMangaUrl(String defaultMangaUrl) {
-        String mangaId = defaultMangaUrl.substring(defaultMangaUrl.lastIndexOf("r") + 1);
-        return String.format(MANGA_URL, mangaId);
+    protected Request mangaDetailsRequest(String mangaUrl) {
+        String mangaId = mangaUrl.substring(mangaUrl.lastIndexOf("r") + 1);
+        return ReqKt.get(String.format(MANGA_URL, mangaId), requestHeaders);
     }
 
     @Override
-    protected String overrideChapterUrl(String defaultPageUrl) {
-        String id = defaultPageUrl.substring(defaultPageUrl.indexOf("#") + 1);
-        return String.format(CHAPTER_URL, id);
+    protected Request pageListRequest(String pageUrl) {
+        String id = pageUrl.substring(pageUrl.indexOf("#") + 1);
+        return ReqKt.get(String.format(CHAPTER_URL, id), requestHeaders);
     }
 
     @Override
-    protected String overridePageUrl(String defaultPageUrl) {
-        int start = defaultPageUrl.indexOf("#") + 1;
-        int end = defaultPageUrl.indexOf("_", start);
-        String id = defaultPageUrl.substring(start, end);
-        return String.format(PAGE_URL, id, defaultPageUrl.substring(end+1));
+    protected Request imageUrlRequest(Page page) {
+        String pageUrl = page.getUrl();
+        int start = pageUrl.indexOf("#") + 1;
+        int end = pageUrl.indexOf("_", start);
+        String id = pageUrl.substring(start, end);
+        return ReqKt.get(String.format(PAGE_URL, id, pageUrl.substring(end+1)), requestHeaders);
     }
 
     private List<Manga> parseMangasFromHtml(Document parsedHtml) {
@@ -205,6 +204,12 @@ public class Batoto extends LoginSource {
 
     @Override
     protected List<Chapter> parseHtmlToChapters(String unparsedHtml) {
+        Matcher matcher = staffNotice.matcher(unparsedHtml);
+        if (matcher.find()) {
+            String notice = Html.fromHtml(matcher.group(1)).toString().trim();
+            throw new RuntimeException(notice);
+        }
+
         Document parsedDocument = Jsoup.parse(unparsedHtml);
 
         List<Chapter> chapterList = new ArrayList<>();
@@ -235,6 +240,7 @@ public class Batoto extends LoginSource {
         return chapter;
     }
 
+    @SuppressWarnings("WrongConstant")
     private long parseDateFromElement(Element dateElement) {
         String dateAsString = dateElement.text();
 
@@ -250,7 +256,6 @@ public class Batoto extends LoginSource {
                 String unit = m.group(2);
 
                 Calendar cal = Calendar.getInstance();
-                // Not an error
                 cal.add(dateFields.get(unit), -amount);
                 date = cal.getTime();
             } else {
@@ -310,7 +315,7 @@ public class Batoto extends LoginSource {
 
     @Override
     public Observable<Boolean> login(String username, String password) {
-        return networkService.getStringResponse(LOGIN_URL, requestHeaders, null)
+        return networkService.requestBody(ReqKt.get(LOGIN_URL, requestHeaders))
                 .flatMap(response -> doLogin(response, username, password))
                 .map(this::isAuthenticationSuccessful);
     }
@@ -320,7 +325,7 @@ public class Batoto extends LoginSource {
         Element form = doc.select("#login").first();
         String postUrl = form.attr("action");
 
-        FormEncodingBuilder formBody = new FormEncodingBuilder();
+        FormBody.Builder formBody = new FormBody.Builder();
         Element authKey = form.select("input[name=auth_key]").first();
 
         formBody.add(authKey.attr("name"), authKey.attr("value"));
@@ -329,7 +334,7 @@ public class Batoto extends LoginSource {
         formBody.add("invisible", "1");
         formBody.add("rememberMe", "1");
 
-        return networkService.postData(postUrl, formBody.build(), requestHeaders);
+        return networkService.request(ReqKt.post(postUrl, requestHeaders, formBody.build()));
     }
 
     @Override
@@ -354,8 +359,13 @@ public class Batoto extends LoginSource {
     @Override
     public Observable<List<Chapter>> pullChaptersFromNetwork(String mangaUrl) {
         Observable<List<Chapter>> observable;
-        if (!isLogged()) {
-            observable = login(prefs.getSourceUsername(this), prefs.getSourcePassword(this))
+        String username = prefs.getSourceUsername(this);
+        String password = prefs.getSourcePassword(this);
+        if (username.isEmpty() && password.isEmpty()) {
+            observable = Observable.error(new Exception("User not logged"));
+        }
+        else if (!isLogged()) {
+            observable = login(username, password)
                     .flatMap(result -> super.pullChaptersFromNetwork(mangaUrl));
         }
         else {

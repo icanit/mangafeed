@@ -5,6 +5,7 @@ import android.content.Context;
 
 import org.acra.ACRA;
 import org.acra.annotation.ReportsCrashes;
+import org.greenrobot.eventbus.EventBus;
 
 import eu.kanade.tachiyomi.injection.ComponentReflectionInjector;
 import eu.kanade.tachiyomi.injection.component.AppComponent;
@@ -23,23 +24,38 @@ public class App extends Application {
     AppComponent applicationComponent;
     ComponentReflectionInjector<AppComponent> componentInjector;
 
+    public static App get(Context context) {
+        return (App) context.getApplicationContext();
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
         if (BuildConfig.DEBUG) Timber.plant(new Timber.DebugTree());
 
-        applicationComponent = DaggerAppComponent.builder()
-                .appModule(new AppModule(this))
-                .build();
+        applicationComponent = prepareAppComponent().build();
 
         componentInjector =
                 new ComponentReflectionInjector<>(AppComponent.class, applicationComponent);
 
-        ACRA.init(this);
+        setupEventBus();
+        setupAcra();
     }
 
-    public static App get(Context context) {
-        return (App) context.getApplicationContext();
+    protected DaggerAppComponent.Builder prepareAppComponent() {
+        return DaggerAppComponent.builder()
+                .appModule(new AppModule(this));
+    }
+
+    protected void setupEventBus() {
+        EventBus.builder()
+                .addIndex(new EventBusIndex())
+                .logNoSubscriberMessages(false)
+                .installDefaultEventBus();
+    }
+
+    protected void setupAcra() {
+        ACRA.init(this);
     }
 
     public AppComponent getComponent() {
@@ -48,10 +64,5 @@ public class App extends Application {
 
     public ComponentReflectionInjector<AppComponent> getComponentReflection() {
         return componentInjector;
-    }
-
-    // Needed to replace the component with a test specific one
-    public void setComponent(AppComponent applicationComponent) {
-        this.applicationComponent = applicationComponent;
     }
 }

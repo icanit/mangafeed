@@ -9,6 +9,9 @@ import android.view.ViewGroup;
 
 import com.f2prateek.rx.preferences.Preference;
 
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,7 +25,6 @@ import eu.kanade.tachiyomi.event.LibraryMangasEvent;
 import eu.kanade.tachiyomi.ui.base.adapter.FlexibleViewHolder;
 import eu.kanade.tachiyomi.ui.base.fragment.BaseFragment;
 import eu.kanade.tachiyomi.ui.manga.MangaActivity;
-import eu.kanade.tachiyomi.util.EventBusHook;
 import eu.kanade.tachiyomi.widget.AutofitRecyclerView;
 import icepick.State;
 import rx.Subscription;
@@ -37,12 +39,15 @@ public class LibraryCategoryFragment extends BaseFragment
     private List<Manga> mangas;
 
     private Subscription numColumnsSubscription;
+    private Subscription searchSubscription;
 
     public static LibraryCategoryFragment newInstance(int position) {
         LibraryCategoryFragment fragment = new LibraryCategoryFragment();
         fragment.position = position;
         return fragment;
     }
+
+
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedState) {
@@ -77,19 +82,29 @@ public class LibraryCategoryFragment extends BaseFragment
             }
         }
 
+        searchSubscription = getLibraryPresenter().searchSubject
+                .subscribe(text -> {
+                    adapter.setSearchText(text);
+                    adapter.updateDataSet();
+                });
+
+
+
         return view;
+
     }
 
     @Override
     public void onDestroyView() {
         numColumnsSubscription.unsubscribe();
+        searchSubscription.unsubscribe();
         super.onDestroyView();
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        registerForStickyEvents();
+        registerForEvents();
     }
 
     @Override
@@ -104,8 +119,8 @@ public class LibraryCategoryFragment extends BaseFragment
         super.onSaveInstanceState(outState);
     }
 
-    @EventBusHook
-    public void onEventMainThread(LibraryMangasEvent event) {
+    @Subscribe(sticky = true, threadMode = ThreadMode.MAIN)
+    public void onEvent(LibraryMangasEvent event) {
         List<Category> categories = getLibraryFragment().getAdapter().categories;
         // When a category is deleted, the index can be greater than the number of categories
         if (position >= categories.size())
@@ -155,15 +170,16 @@ public class LibraryCategoryFragment extends BaseFragment
 
     private void toggleSelection(int position) {
         LibraryFragment f = getLibraryFragment();
-
         adapter.toggleSelection(position, false);
         f.getPresenter().setSelection(adapter.getItem(position), adapter.isSelected(position));
 
         int count = f.getPresenter().selectedMangas.size();
         if (count == 0) {
             f.destroyActionModeIfNeeded();
-        } else {
+        }
+        else {
             f.setContextTitle(count);
+            f.setVisibilityOfCoverEdit(count);
             f.invalidateActionMode();
         }
     }

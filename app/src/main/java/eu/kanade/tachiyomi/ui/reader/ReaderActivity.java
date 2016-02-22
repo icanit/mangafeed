@@ -3,15 +3,17 @@ package eu.kanade.tachiyomi.ui.reader;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.v4.app.FragmentManager;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.widget.Toolbar;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
@@ -20,11 +22,8 @@ import com.afollestad.materialdialogs.MaterialDialog;
 
 import java.util.List;
 
-import javax.inject.Inject;
-
 import butterknife.Bind;
 import butterknife.ButterKnife;
-import eu.kanade.tachiyomi.App;
 import eu.kanade.tachiyomi.R;
 import eu.kanade.tachiyomi.data.database.models.Chapter;
 import eu.kanade.tachiyomi.data.database.models.Manga;
@@ -48,8 +47,6 @@ public class ReaderActivity extends BaseRxActivity<ReaderPresenter> {
 
     @Bind(R.id.page_number) TextView pageNumber;
     @Bind(R.id.toolbar) Toolbar toolbar;
-
-    @Inject PreferencesHelper preferences;
 
     private BaseReader viewer;
     private ReaderMenu readerMenu;
@@ -75,7 +72,6 @@ public class ReaderActivity extends BaseRxActivity<ReaderPresenter> {
     @Override
     public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
-        App.get(this).getComponent().inject(this);
         setContentView(R.layout.activity_reader);
         ButterKnife.bind(this);
 
@@ -158,41 +154,90 @@ public class ReaderActivity extends BaseRxActivity<ReaderPresenter> {
         }
     }
 
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int action = event.getAction();
+        int keyCode = event.getKeyCode();
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+                if (action == KeyEvent.ACTION_UP && viewer != null)
+                    viewer.moveToNext();
+                return true;
+            case KeyEvent.KEYCODE_VOLUME_UP:
+                if (action == KeyEvent.ACTION_UP && viewer != null)
+                    viewer.moveToPrevious();
+                return true;
+            default:
+                return super.dispatchKeyEvent(event);
+        }
+    }
+
     public void onChapterError() {
         finish();
         ToastUtil.showShort(this, R.string.page_list_error);
     }
 
-    public void onChapterReady(List<Page> pages, Manga manga, Chapter chapter, int currentPage) {
-        if (currentPage == -1) {
-            currentPage = pages.size() - 1;
+    public void onChapterAppendError() {
+        // Ignore
+    }
+
+    public void onChapterReady(Manga manga, Chapter chapter, Page currentPage) {
+        List<Page> pages = chapter.getPages();
+        if (currentPage == null) {
+            currentPage = pages.get(pages.size() - 1);
         }
 
         if (viewer == null) {
-            viewer = createViewer(manga);
-            getSupportFragmentManager().beginTransaction().replace(R.id.reader, viewer).commit();
+            viewer = getOrCreateViewer(manga);
         }
-        viewer.onPageListReady(pages, currentPage);
-        readerMenu.onChapterReady(pages.size(), manga, chapter, currentPage);
+        viewer.onPageListReady(chapter, currentPage);
+        readerMenu.setActiveManga(manga);
+        readerMenu.setActiveChapter(chapter, currentPage.getPageNumber());
+    }
+
+    public void onEnterChapter(Chapter chapter, int currentPage) {
+        if (currentPage == -1) {
+            currentPage = chapter.getPages().size() - 1;
+        }
+        getPresenter().setActiveChapter(chapter);
+        readerMenu.setActiveChapter(chapter, currentPage);
+    }
+
+    public void onAppendChapter(Chapter chapter) {
+        viewer.onPageListAppendReady(chapter);
     }
 
     public void onAdjacentChapters(Chapter previous, Chapter next) {
         readerMenu.onAdjacentChapters(previous, next);
     }
 
-    private BaseReader createViewer(Manga manga) {
-        int mangaViewer = manga.viewer == 0 ? preferences.getDefaultViewer() : manga.viewer;
+    private BaseReader getOrCreateViewer(Manga manga) {
+        int mangaViewer = manga.viewer == 0 ? getPreferences().getDefaultViewer() : manga.viewer;
 
-        switch (mangaViewer) {
-            case LEFT_TO_RIGHT: default:
-                return new LeftToRightReader();
-            case RIGHT_TO_LEFT:
-                return new RightToLeftReader();
-            case VERTICAL:
-                return new VerticalReader();
-            case WEBTOON:
-                return new WebtoonReader();
+        FragmentManager fm = getSupportFragmentManager();
+
+        // Try to reuse the viewer using its tag
+        BaseReader fragment = (BaseReader) fm.findFragmentByTag(manga.viewer + "");
+        if (fragment == null) {
+            // Create a new viewer
+            switch (mangaViewer) {
+                case LEFT_TO_RIGHT: default:
+                    fragment = new LeftToRightReader();
+                    break;
+                case RIGHT_TO_LEFT:
+                    fragment = new RightToLeftReader();
+                    break;
+                case VERTICAL:
+                    fragment = new VerticalReader();
+                    break;
+                case WEBTOON:
+                    fragment = new WebtoonReader();
+                    break;
+            }
+
+            fm.beginTransaction().replace(R.id.reader, fragment, manga.viewer + "").commit();
         }
+        return fragment;
     }
 
     public void onPageChanged(int currentPageIndex, int totalPages) {
@@ -201,8 +246,9 @@ public class ReaderActivity extends BaseRxActivity<ReaderPresenter> {
         readerMenu.onPageChanged(currentPageIndex);
     }
 
-    public void setSelectedPage(int pageIndex) {
-        viewer.setSelectedPage(pageIndex);
+    public void gotoPageInCurrentChapter(int pageIndex) {
+        Page requestedPage = viewer.getCurrentPage().getChapter().getPages().get(pageIndex);
+        viewer.setSelectedPage(requestedPage);
     }
 
     public void onCenterSingleTap() {
@@ -210,7 +256,7 @@ public class ReaderActivity extends BaseRxActivity<ReaderPresenter> {
     }
 
     public void requestNextChapter() {
-        getPresenter().setCurrentPage(viewer != null ? viewer.getCurrentPage() : 0);
+        getPresenter().setCurrentPage(viewer.getCurrentPage());
         if (!getPresenter().loadNextChapter()) {
             ToastUtil.showShort(this, R.string.no_next_chapter);
         }
@@ -218,20 +264,22 @@ public class ReaderActivity extends BaseRxActivity<ReaderPresenter> {
     }
 
     public void requestPreviousChapter() {
-        getPresenter().setCurrentPage(viewer != null ? viewer.getCurrentPage() : 0);
+        getPresenter().setCurrentPage(viewer.getCurrentPage());
         if (!getPresenter().loadPreviousChapter()) {
             ToastUtil.showShort(this, R.string.no_previous_chapter);
         }
     }
 
     private void initializeSettings() {
+        PreferencesHelper preferences = getPreferences();
+
         subscriptions.add(preferences.showPageNumber()
                 .asObservable()
                 .subscribe(this::setPageNumberVisibility));
 
-        subscriptions.add(preferences.lockOrientation()
+        subscriptions.add(preferences.rotation()
                 .asObservable()
-                .subscribe(this::setOrientation));
+                .subscribe(this::setRotation));
 
         subscriptions.add(preferences.hideStatusBar()
                 .asObservable()
@@ -251,28 +299,25 @@ public class ReaderActivity extends BaseRxActivity<ReaderPresenter> {
                 .subscribe(this::applyTheme));
     }
 
-    private void setOrientation(boolean locked) {
-        if (locked) {
-            int orientation;
-            int rotation = ((WindowManager) getSystemService(
-                    Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
-            switch (rotation) {
-                case Surface.ROTATION_0:
-                    orientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
-                    break;
-                case Surface.ROTATION_90:
-                    orientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
-                    break;
-                case Surface.ROTATION_180:
-                    orientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT;
-                    break;
-                default:
-                    orientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
-                    break;
-            }
-            setRequestedOrientation(orientation);
-        } else {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+    private void setRotation(int rotation) {
+        switch (rotation) {
+            // Rotation free
+            case 1:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                break;
+            // Lock in current rotation
+            case 2:
+                int currentOrientation = getResources().getConfiguration().orientation;
+                setRotation(currentOrientation == Configuration.ORIENTATION_PORTRAIT ? 3 : 4);
+                break;
+            // Lock in portrait
+            case 3:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+                break;
+            // Lock in landscape
+            case 4:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                break;
         }
     }
 
@@ -290,7 +335,7 @@ public class ReaderActivity extends BaseRxActivity<ReaderPresenter> {
 
     private void setCustomBrightness(boolean enabled) {
         if (enabled) {
-            subscriptions.add(customBrightnessSubscription = preferences.customBrightnessValue()
+            subscriptions.add(customBrightnessSubscription = getPreferences().customBrightnessValue()
                     .asObservable()
                     .subscribe(this::setCustomBrightnessValue));
         } else {
@@ -348,7 +393,7 @@ public class ReaderActivity extends BaseRxActivity<ReaderPresenter> {
     }
 
     public PreferencesHelper getPreferences() {
-        return preferences;
+        return getPresenter().prefs;
     }
 
     public BaseReader getViewer() {

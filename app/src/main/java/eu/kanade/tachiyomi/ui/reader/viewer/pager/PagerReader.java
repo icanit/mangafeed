@@ -1,15 +1,18 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.pager;
 
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ViewGroup;
 
-import java.util.List;
+import java.util.ArrayList;
 
 import eu.kanade.tachiyomi.R;
+import eu.kanade.tachiyomi.data.database.models.Chapter;
+import eu.kanade.tachiyomi.data.preference.PreferencesHelper;
 import eu.kanade.tachiyomi.data.source.model.Page;
 import eu.kanade.tachiyomi.ui.reader.viewer.base.BaseReader;
-import eu.kanade.tachiyomi.ui.reader.viewer.base.OnChapterBoundariesOutListener;
-import eu.kanade.tachiyomi.ui.reader.viewer.base.OnChapterSingleTapListener;
+import eu.kanade.tachiyomi.ui.reader.viewer.pager.horizontal.LeftToRightReader;
+import eu.kanade.tachiyomi.ui.reader.viewer.pager.horizontal.RightToLeftReader;
 import rx.subscriptions.CompositeSubscription;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
@@ -18,9 +21,21 @@ public abstract class PagerReader extends BaseReader {
 
     protected PagerReaderAdapter adapter;
     protected Pager pager;
+    protected GestureDetector gestureDetector;
 
     protected boolean transitions;
     protected CompositeSubscription subscriptions;
+
+    protected int scaleType = 1;
+    protected int zoomStart = 1;
+
+    public static final int ALIGN_AUTO = 1;
+    public static final int ALIGN_LEFT = 2;
+    public static final int ALIGN_RIGHT = 3;
+    public static final int ALIGN_CENTER = 4;
+
+    private static final float LEFT_REGION = 0.33f;
+    private static final float RIGHT_REGION = 0.66f;
 
     protected void initializePager(Pager pager) {
         this.pager = pager;
@@ -30,43 +45,43 @@ public abstract class PagerReader extends BaseReader {
         pager.setOnChapterBoundariesOutListener(new OnChapterBoundariesOutListener() {
             @Override
             public void onFirstPageOutEvent() {
-                onFirstPageOut();
+                getReaderActivity().requestPreviousChapter();
             }
 
             @Override
             public void onLastPageOutEvent() {
-                onLastPageOut();
+                getReaderActivity().requestNextChapter();
             }
         });
-        pager.setOnChapterSingleTapListener(new OnChapterSingleTapListener() {
-            @Override
-            public void onCenterTap() {
-                getReaderActivity().onCenterSingleTap();
-            }
-
-            @Override
-            public void onLeftSideTap() {
-                pager.setCurrentItem(pager.getCurrentItem() - 1, transitions);
-            }
-
-            @Override
-            public void onRightSideTap() {
-                pager.setCurrentItem(pager.getCurrentItem() + 1, transitions);
-            }
-        });
+        gestureDetector = createGestureDetector();
 
         adapter = new PagerReaderAdapter(getChildFragmentManager());
         pager.setAdapter(adapter);
 
+        PreferencesHelper preferences = getReaderActivity().getPreferences();
         subscriptions = new CompositeSubscription();
-        subscriptions.add(getReaderActivity().getPreferences().imageDecoder()
+        subscriptions.add(preferences.imageDecoder()
                 .asObservable()
-                .doOnNext(this::setRegionDecoderClass)
+                .doOnNext(this::setDecoderClass)
                 .skip(1)
                 .distinctUntilChanged()
-                .subscribe(v -> adapter.notifyDataSetChanged()));
+                .subscribe(v -> pager.setAdapter(adapter)));
 
-        subscriptions.add(getReaderActivity().getPreferences().enableTransitions()
+        subscriptions.add(preferences.imageScaleType()
+                .asObservable()
+                .doOnNext(this::setImageScaleType)
+                .skip(1)
+                .distinctUntilChanged()
+                .subscribe(v -> pager.setAdapter(adapter)));
+
+        subscriptions.add(preferences.zoomStart()
+                .asObservable()
+                .doOnNext(this::setZoomStart)
+                .skip(1)
+                .distinctUntilChanged()
+                .subscribe(v -> pager.setAdapter(adapter)));
+
+        subscriptions.add(preferences.enableTransitions()
                 .asObservable()
                 .subscribe(value -> transitions = value));
 
@@ -79,14 +94,41 @@ public abstract class PagerReader extends BaseReader {
         super.onDestroyView();
     }
 
-    @Override
-    public void onPageListReady(List<Page> pages, int currentPage) {
-        if (this.pages != pages) {
-            this.pages = pages;
-            this.currentPage = currentPage;
-            if (isResumed()) {
-                setPages();
+    protected GestureDetector createGestureDetector() {
+        return new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                final float positionX = e.getX();
+
+                if (positionX < pager.getWidth() * LEFT_REGION) {
+                    onLeftSideTap();
+                } else if (positionX > pager.getWidth() * RIGHT_REGION) {
+                    onRightSideTap();
+                } else {
+                    getReaderActivity().onCenterSingleTap();
+                }
+                return true;
             }
+        });
+    }
+
+    @Override
+    public void onSetChapter(Chapter chapter, Page currentPage) {
+        pages = new ArrayList<>(chapter.getPages());
+        this.currentPage = getPageIndex(currentPage); // we might have a new page object
+
+        // This method can be called before the view is created
+        if (pager != null) {
+            setPages();
+        }
+    }
+
+    public void onAppendChapter(Chapter chapter) {
+        pages.addAll(chapter.getPages());
+
+        // This method can be called before the view is created
+        if (pager != null) {
+            adapter.setPages(pages);
         }
     }
 
@@ -102,15 +144,48 @@ public abstract class PagerReader extends BaseReader {
 
     @Override
     public void setSelectedPage(int pageNumber) {
-        pager.setCurrentItem(getPositionForPage(pageNumber), false);
+        pager.setCurrentItem(pageNumber, false);
     }
 
-    @Override
-    public boolean onImageTouch(MotionEvent motionEvent) {
-        return pager.onImageTouch(motionEvent);
+    protected void onLeftSideTap() {
+        moveToPrevious();
     }
 
-    public abstract void onFirstPageOut();
-    public abstract void onLastPageOut();
+    protected void onRightSideTap() {
+        moveToNext();
+    }
+
+    public void moveToNext() {
+        if (pager.getCurrentItem() != pager.getAdapter().getCount() - 1) {
+            pager.setCurrentItem(pager.getCurrentItem() + 1, transitions);
+        } else {
+            getReaderActivity().requestNextChapter();
+        }
+    }
+
+    public void moveToPrevious() {
+        if (pager.getCurrentItem() != 0) {
+            pager.setCurrentItem(pager.getCurrentItem() - 1, transitions);
+        } else {
+            getReaderActivity().requestPreviousChapter();
+        }
+    }
+
+    private void setImageScaleType(int scaleType) {
+        this.scaleType = scaleType;
+    }
+
+    private void setZoomStart(int zoomStart) {
+        if (zoomStart == ALIGN_AUTO) {
+            if (this instanceof LeftToRightReader)
+                setZoomStart(ALIGN_LEFT);
+            else if (this instanceof RightToLeftReader)
+                setZoomStart(ALIGN_RIGHT);
+            else
+                setZoomStart(ALIGN_CENTER);
+        } else {
+            this.zoomStart = zoomStart;
+        }
+    }
 
 }

@@ -121,10 +121,15 @@ public class SubsamplingScaleImageView extends View {
     public static final int SCALE_TYPE_CENTER_INSIDE = 1;
     /** Scale the image uniformly so that both dimensions of the image will be equal to or larger than the corresponding dimension of the view. The image is then centered in the view. */
     public static final int SCALE_TYPE_CENTER_CROP = 2;
+    public static final int SCALE_TYPE_FIT_WIDTH = 3;
+    public static final int SCALE_TYPE_FIT_HEIGHT = 4;
+    public static final int SCALE_TYPE_ORIGINAL_SIZE = 5;
+    public static final int SCALE_TYPE_SMART_FIT = 6;
     /** Scale the image so that both dimensions of the image will be equal to or less than the maxScale and equal to or larger than minScale. The image is then centered in the view. */
-    public static final int SCALE_TYPE_CUSTOM = 3;
+    public static final int SCALE_TYPE_CUSTOM = 7;
 
-    private static final List<Integer> VALID_SCALE_TYPES = Arrays.asList(SCALE_TYPE_CENTER_CROP, SCALE_TYPE_CENTER_INSIDE, SCALE_TYPE_CUSTOM);
+
+    private static final List<Integer> VALID_SCALE_TYPES = Arrays.asList(SCALE_TYPE_CENTER_CROP, SCALE_TYPE_CENTER_INSIDE, SCALE_TYPE_CUSTOM, SCALE_TYPE_FIT_WIDTH, SCALE_TYPE_FIT_HEIGHT, SCALE_TYPE_SMART_FIT, SCALE_TYPE_ORIGINAL_SIZE);
 
     // Bitmap (preview or full image)
     private Bitmap bitmap;
@@ -196,8 +201,12 @@ public class SubsamplingScaleImageView extends View {
     private int sOrientation;
     private Rect sRegion;
     private Rect pRegion;
-    private int cWidth;
-    private int cHeight;
+
+    // Max bitmap dimensions the device can display
+    private int maxBitmapDimensions;
+
+    // Vertical pagers/scrollers should enable this
+    private boolean isVerticalScrollingParent;
 
     // Is two-finger zooming in progress
     private boolean isZooming;
@@ -749,16 +758,32 @@ public class SubsamplingScaleImageView extends View {
                             float lastX = vTranslate.x;
                             float lastY = vTranslate.y;
                             fitToBounds(true);
-                            boolean atXEdge = lastX != vTranslate.x;
-                            boolean edgeXSwipe = atXEdge && dx > dy && !isPanning;
-                            boolean yPan = lastY == vTranslate.y && dy > 15;
-                            if (!edgeXSwipe && (!atXEdge || yPan || isPanning)) {
-                                isPanning = true;
-                            } else if (dx > 5) {
-                                // Haven't panned the image, and we're at the left or right edge. Switch to page swipe.
-                                maxTouchCount = 0;
-                                handler.removeMessages(MESSAGE_LONG_CLICK);
-                                getParent().requestDisallowInterceptTouchEvent(false);
+                            if (!isVerticalScrollingParent) {
+                                boolean atXEdge = lastX != vTranslate.x;
+                                boolean edgeXSwipe = atXEdge && dx > dy && !isPanning;
+                                boolean yPan = lastY == vTranslate.y && dy > 15;
+
+                                if (!edgeXSwipe && (!atXEdge || yPan || isPanning)) {
+                                    isPanning = true;
+                                } else if (dx > 5) {
+                                    // Haven't panned the image, and we're at the left or right edge. Switch to page swipe.
+                                    maxTouchCount = 0;
+                                    handler.removeMessages(MESSAGE_LONG_CLICK);
+                                    getParent().requestDisallowInterceptTouchEvent(false);
+                                }
+                            } else {
+                                boolean atYEdge = lastY != vTranslate.y;
+                                boolean edgeYSwipe = atYEdge && dy > dx && !isPanning;
+                                boolean xPan = lastX == vTranslate.x && dx > 15;
+
+                                if (!edgeYSwipe && (!atYEdge || xPan || isPanning)) {
+                                    isPanning = true;
+                                } else if (dy > 5) {
+                                    // Haven't panned the image, and we're at the top or bottom edge. Switch to page swipe.
+                                    maxTouchCount = 0;
+                                    handler.removeMessages(MESSAGE_LONG_CLICK);
+                                    getParent().requestDisallowInterceptTouchEvent(false);
+                                }
                             }
 
                             if (!panEnabled) {
@@ -865,7 +890,7 @@ public class SubsamplingScaleImageView extends View {
         }
 
         // When using tiles, on first render with no tile map ready, initialise it and kick off async base image loading.
-        if (tileMap == null && decoder != null) {
+        if (tileMap == null && decoder != null && maxBitmapDimensions == 0) {
             initialiseBaseLayer(getMaxBitmapDimensions(canvas));
         }
 
@@ -1385,11 +1410,6 @@ public class SubsamplingScaleImageView extends View {
         }
     }
 
-    public void setMaxDimensions(int width, int height) {
-        cWidth = width;
-        cHeight = height;
-    }
-
     /**
      * Async task used to get image details without blocking the UI thread.
      */
@@ -1468,8 +1488,8 @@ public class SubsamplingScaleImageView extends View {
         this.sHeight = sHeight;
         this.sOrientation = sOrientation;
         checkReady();
-        if (!checkImageLoaded() && cWidth != 0 && cHeight != 0) {
-            initialiseBaseLayer(new Point(cWidth, cHeight));
+        if (!checkImageLoaded() && maxBitmapDimensions > 0) {
+            initialiseBaseLayer(new Point(maxBitmapDimensions, maxBitmapDimensions));
         }
         invalidate();
         requestLayout();
@@ -2003,12 +2023,28 @@ public class SubsamplingScaleImageView extends View {
     private float minScale() {
         int vPadding = getPaddingBottom() + getPaddingTop();
         int hPadding = getPaddingLeft() + getPaddingRight();
-        if (minimumScaleType == SCALE_TYPE_CENTER_CROP) {
-            return Math.max((getWidth() - hPadding) / (float) sWidth(), (getHeight() - vPadding) / (float) sHeight());
-        } else if (minimumScaleType == SCALE_TYPE_CUSTOM && minScale > 0) {
-            return minScale;
-        } else {
-            return Math.min((getWidth() - hPadding) / (float) sWidth(), (getHeight() - vPadding) / (float) sHeight());
+        switch (minimumScaleType) {
+            case SCALE_TYPE_CENTER_INSIDE:
+            default:
+                return Math.min((getWidth() - hPadding) / (float) sWidth(), (getHeight() - vPadding) / (float) sHeight());
+            case SCALE_TYPE_CENTER_CROP:
+                return Math.max((getWidth() - hPadding) / (float) sWidth(), (getHeight() - vPadding) / (float) sHeight());
+            case SCALE_TYPE_FIT_WIDTH:
+                return (getWidth() - hPadding) / (float) sWidth();
+            case SCALE_TYPE_FIT_HEIGHT:
+                return (getHeight() - vPadding) / (float) sHeight();
+            case SCALE_TYPE_ORIGINAL_SIZE:
+                return 1;
+            case SCALE_TYPE_SMART_FIT:
+                if (sWidth <= sHeight) {
+                    // Fit to width
+                    return (getWidth() - hPadding) / (float) sWidth();
+                } else {
+                    // Fit to height
+                    return (getHeight() - vPadding) / (float) sHeight();
+                }
+            case SCALE_TYPE_CUSTOM:
+                return minScale;
         }
     }
 
@@ -2453,6 +2489,21 @@ public class SubsamplingScaleImageView extends View {
      */
     public void setParallelLoadingEnabled(boolean parallelLoadingEnabled) {
         this.parallelLoadingEnabled = parallelLoadingEnabled;
+    }
+
+    /**
+     * Set max bitmap dimensions the device can display
+     */
+    public void setMaxBitmapDimensions(int maxBitmapDimensions) {
+        this.maxBitmapDimensions = maxBitmapDimensions;
+    }
+
+
+    /**
+     * Set vertical scroll mode to fix gestures
+     */
+    public void setVerticalScrollingParent(boolean isVerticalScrollingParent) {
+        this.isVerticalScrollingParent = isVerticalScrollingParent;
     }
 
     /**

@@ -1,12 +1,16 @@
 package eu.kanade.tachiyomi.ui.library;
 
+import android.app.Activity;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.design.widget.AppBarLayout;
 import android.support.design.widget.TabLayout;
 import android.support.v4.view.ViewPager;
 import android.support.v7.view.ActionMode;
+import android.support.v7.widget.SearchView;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -16,22 +20,27 @@ import android.view.ViewGroup;
 
 import com.afollestad.materialdialogs.MaterialDialog;
 
+import org.greenrobot.eventbus.EventBus;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import butterknife.Bind;
 import butterknife.ButterKnife;
-import de.greenrobot.event.EventBus;
 import eu.davidea.flexibleadapter.FlexibleAdapter;
 import eu.kanade.tachiyomi.R;
 import eu.kanade.tachiyomi.data.database.models.Category;
 import eu.kanade.tachiyomi.data.database.models.Manga;
-import eu.kanade.tachiyomi.data.sync.LibraryUpdateService;
+import eu.kanade.tachiyomi.data.io.IOHandler;
+import eu.kanade.tachiyomi.data.library.LibraryUpdateService;
 import eu.kanade.tachiyomi.event.LibraryMangasEvent;
 import eu.kanade.tachiyomi.ui.base.fragment.BaseRxFragment;
 import eu.kanade.tachiyomi.ui.library.category.CategoryActivity;
 import eu.kanade.tachiyomi.ui.main.MainActivity;
+import eu.kanade.tachiyomi.util.ToastUtil;
 import icepick.State;
 import nucleus.factory.RequiresPresenter;
 
@@ -39,15 +48,24 @@ import nucleus.factory.RequiresPresenter;
 public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
         implements ActionMode.Callback {
 
-    @Bind(R.id.view_pager) ViewPager viewPager;
-    private TabLayout tabs;
-    private AppBarLayout appBar;
+
+    private static final int REQUEST_IMAGE_OPEN = 101;
 
     protected LibraryAdapter adapter;
 
-    private ActionMode actionMode;
+    @Bind(R.id.view_pager) ViewPager viewPager;
 
     @State int activeCategory;
+
+    @State String query = "";
+
+    private TabLayout tabs;
+
+    private AppBarLayout appBar;
+
+    private ActionMode actionMode;
+
+    private Manga selectedCoverManga;
 
     public static LibraryFragment newInstance() {
         return new LibraryFragment();
@@ -60,8 +78,7 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedState) {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_library, container, false);
         setToolbarTitle(getString(R.string.label_library));
@@ -75,6 +92,10 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
         viewPager.setAdapter(adapter);
         tabs.setupWithViewPager(viewPager);
 
+        if (savedState != null) {
+            getPresenter().searchSubject.onNext(query);
+        }
+
         return view;
     }
 
@@ -82,12 +103,6 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
     public void onDestroyView() {
         appBar.removeView(tabs);
         super.onDestroyView();
-    }
-
-    @Override
-    public void onPause() {
-        EventBus.getDefault().removeStickyEvent(LibraryMangasEvent.class);
-        super.onPause();
     }
 
     @Override
@@ -99,6 +114,29 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
         inflater.inflate(R.menu.library, menu);
+
+        // Initialize search menu
+        MenuItem searchItem = menu.findItem(R.id.action_search);
+        final SearchView searchView = (SearchView) searchItem.getActionView();
+
+        if (!TextUtils.isEmpty(query)) {
+            searchItem.expandActionView();
+            searchView.setQuery(query, true);
+            searchView.clearFocus();
+        }
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                onSearchTextChange(query);
+                return true;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                onSearchTextChange(newText);
+                return true;
+            }
+        });
     }
 
     @Override
@@ -113,6 +151,11 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    private void onSearchTextChange(String query) {
+        this.query = query;
+        getPresenter().searchSubject.onNext(query);
     }
 
     private void onEditCategories() {
@@ -158,6 +201,11 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
         actionMode.setTitle(getString(R.string.label_selected, count));
     }
 
+    public void setVisibilityOfCoverEdit(int count) {
+        // If count = 1 display edit button
+        actionMode.getMenu().findItem(R.id.action_edit_cover).setVisible((count == 1));
+    }
+
     @Override
     public boolean onCreateActionMode(ActionMode mode, Menu menu) {
         mode.getMenuInflater().inflate(R.menu.library_selection, menu);
@@ -173,6 +221,11 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
     @Override
     public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
         switch (item.getItemId()) {
+            case R.id.action_edit_cover:
+                changeSelectedCover(getPresenter().selectedMangas);
+                rebuildAdapter();
+                destroyActionModeIfNeeded();
+                return true;
             case R.id.action_move_to_category:
                 moveMangasToCategories(getPresenter().selectedMangas);
                 return true;
@@ -182,6 +235,15 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
                 return true;
         }
         return false;
+    }
+
+    /**
+     * TODO workaround. Covers won't refresh any other way.
+     */
+    public void rebuildAdapter() {
+        adapter = new LibraryAdapter(getChildFragmentManager());
+        viewPager.setAdapter(adapter);
+        tabs.setupWithViewPager(viewPager);
     }
 
     @Override
@@ -194,6 +256,53 @@ public class LibraryFragment extends BaseRxFragment<LibraryPresenter>
     public void destroyActionModeIfNeeded() {
         if (actionMode != null) {
             actionMode.finish();
+        }
+    }
+
+    private void changeSelectedCover(List<Manga> mangas) {
+        if (mangas.size() == 1) {
+            selectedCoverManga = mangas.get(0);
+            if (selectedCoverManga.favorite) {
+
+                Intent intent = new Intent();
+                intent.setType("image/*");
+                intent.setAction(Intent.ACTION_GET_CONTENT);
+                startActivityForResult(Intent.createChooser(intent,
+                        getString(R.string.file_select_cover)), REQUEST_IMAGE_OPEN);
+            } else {
+                ToastUtil.showShort(getContext(), R.string.notification_first_add_to_library);
+            }
+
+        }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (resultCode == Activity.RESULT_OK) {
+            switch (requestCode) {
+                case (REQUEST_IMAGE_OPEN):
+                    if (selectedCoverManga != null) {
+                        // Get the file's content URI from the incoming Intent
+                        Uri selectedImageUri = data.getData();
+
+                        // Convert to absolute path to prevent FileNotFoundException
+                        String result = IOHandler.getFilePath(selectedImageUri,
+                                getContext().getContentResolver(), getContext());
+
+                        // Get file from filepath
+                        File picture = new File(result != null ? result : "");
+
+                        try {
+                            // Update cover to selected file, show error if something went wrong
+                            if (!getPresenter().editCoverWithLocalFile(picture, selectedCoverManga))
+                                ToastUtil.showShort(getContext(), R.string.notification_manga_update_failed);
+
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    break;
+            }
         }
     }
 

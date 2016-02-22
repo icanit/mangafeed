@@ -10,6 +10,7 @@ import java.util.List;
 
 import eu.kanade.tachiyomi.R;
 import eu.kanade.tachiyomi.data.source.model.Page;
+import eu.kanade.tachiyomi.ui.reader.ReaderActivity;
 
 public class WebtoonAdapter extends RecyclerView.Adapter<WebtoonHolder> {
 
@@ -20,7 +21,7 @@ public class WebtoonAdapter extends RecyclerView.Adapter<WebtoonHolder> {
     public WebtoonAdapter(WebtoonReader fragment) {
         this.fragment = fragment;
         pages = new ArrayList<>();
-        touchListener = (v, event) -> fragment.onImageTouch(event);
+        touchListener = (v, event) -> fragment.gestureDetector.onTouchEvent(event);
     }
 
     public Page getItem(int position) {
@@ -62,6 +63,10 @@ public class WebtoonAdapter extends RecyclerView.Adapter<WebtoonHolder> {
 
     public WebtoonReader getReader() {
         return fragment;
+    }
+
+    public ReaderActivity getReaderActivity() {
+        return (ReaderActivity) fragment.getActivity();
     }
 
 }

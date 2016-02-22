@@ -1,20 +1,26 @@
 package eu.kanade.tachiyomi.ui.manga;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.design.widget.TabLayout;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.view.ViewPager;
 import android.support.v7.widget.Toolbar;
+
+import org.greenrobot.eventbus.EventBus;
 
 import javax.inject.Inject;
 
 import butterknife.Bind;
 import butterknife.ButterKnife;
-import de.greenrobot.event.EventBus;
 import eu.kanade.tachiyomi.App;
 import eu.kanade.tachiyomi.R;
 import eu.kanade.tachiyomi.data.database.models.Manga;
@@ -63,6 +69,8 @@ public class MangaActivity extends BaseRxActivity<MangaPresenter> {
         isOnline = intent.getBooleanExtra(MANGA_ONLINE, false);
 
         setupViewPager();
+
+        requestPermissionsOnMarshmallow();
     }
 
     private void setupViewPager() {
@@ -81,6 +89,21 @@ public class MangaActivity extends BaseRxActivity<MangaPresenter> {
 
     public boolean isCatalogueManga() {
         return isOnline;
+    }
+
+    private void requestPermissionsOnMarshmallow() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                Manifest.permission.READ_EXTERNAL_STORAGE},
+                        1);
+
+            }
+        }
     }
 
     class MangaDetailAdapter extends FragmentPagerAdapter {

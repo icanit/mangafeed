@@ -32,6 +32,7 @@ public class CataloguePresenter extends BasePresenter<CatalogueFragment> {
     @Inject CoverCache coverCache;
     @Inject PreferencesHelper prefs;
 
+    private List<Source> sources;
     private Source source;
     @State int sourceId;
 
@@ -53,23 +54,25 @@ public class CataloguePresenter extends BasePresenter<CatalogueFragment> {
         super.onCreate(savedState);
 
         if (savedState != null) {
-            onProcessRestart();
+            source = sourceManager.get(sourceId);
         }
+
+        sources = sourceManager.getSources();
 
         mangaDetailSubject = PublishSubject.create();
 
         pager = new RxPager<>();
 
-        restartableReplay(GET_MANGA_LIST,
+        startableReplay(GET_MANGA_LIST,
                 pager::results,
                 (view, pair) -> view.onAddPage(pair.first, pair.second));
 
-        restartableFirst(GET_MANGA_PAGE,
+        startableFirst(GET_MANGA_PAGE,
                 () -> pager.request(page -> getMangasPageObservable(page + 1)),
                 (view, next) -> {},
                 (view, error) -> view.onAddPageError());
 
-        restartableLatestCache(GET_MANGA_DETAIL,
+        startableLatestCache(GET_MANGA_DETAIL,
                 () -> mangaDetailSubject
                         .observeOn(Schedulers.io())
                         .flatMap(Observable::from)
@@ -82,13 +85,6 @@ public class CataloguePresenter extends BasePresenter<CatalogueFragment> {
 
         add(prefs.catalogueAsList().asObservable()
                 .subscribe(this::setDisplayMode));
-    }
-
-    private void onProcessRestart() {
-        source = sourceManager.get(sourceId);
-        stop(GET_MANGA_LIST);
-        stop(GET_MANGA_DETAIL);
-        stop(GET_MANGA_PAGE);
     }
 
     private void setDisplayMode(boolean asList) {
@@ -175,12 +171,33 @@ public class CataloguePresenter extends BasePresenter<CatalogueFragment> {
         return lastMangasPage != null && lastMangasPage.nextPageUrl != null;
     }
 
+    public int getLastUsedSourceIndex() {
+        int index = prefs.lastUsedCatalogueSource().get();
+        if (index < 0 || index >= sources.size() || !isValidSource(sources.get(index))) {
+            return findFirstValidSource();
+        }
+        return index;
+    }
+
     public boolean isValidSource(Source source) {
         if (!source.isLoginRequired() || source.isLogged())
             return true;
 
         return !(prefs.getSourceUsername(source).equals("")
                 || prefs.getSourcePassword(source).equals(""));
+    }
+
+    public int findFirstValidSource() {
+        for (int i = 0; i < sources.size(); i++) {
+            if (isValidSource(sources.get(i))) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    public void setEnabledSource(int index) {
+        prefs.lastUsedCatalogueSource().set(index);
     }
 
     public List<Source> getEnabledSources() {
