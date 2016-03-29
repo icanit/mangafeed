@@ -2,6 +2,7 @@ import java.text.SimpleDateFormat
 
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
 apply plugin: 'com.neenbedankt.android-apt'
 apply plugin: 'me.tatarka.retrolambda'
 
@@ -97,18 +98,16 @@ apt {
 }
 
 dependencies {
-    final SUPPORT_LIBRARY_VERSION = '23.1.1'
+    final SUPPORT_LIBRARY_VERSION = '23.2.0'
     final DAGGER_VERSION = '2.0.2'
-    final EVENTBUS_VERSION = '3.0.0'
-    final OKHTTP_VERSION = '3.1.2'
+    final OKHTTP_VERSION = '3.2.0'
     final RETROFIT_VERSION = '2.0.0-beta4'
     final STORIO_VERSION = '1.8.0'
-    final ICEPICK_VERSION = '3.1.0'
+    final ICEPICK_VERSION = '3.2.0'
     final MOCKITO_VERSION = '1.10.19'
 
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile project(":SubsamplingScaleImageView")
-    compile project(":ReactiveNetwork")
 
     compile "com.android.support:support-v4:$SUPPORT_LIBRARY_VERSION"
     compile "com.android.support:appcompat-v7:$SUPPORT_LIBRARY_VERSION"
@@ -134,17 +133,17 @@ dependencies {
     compile 'info.android15.nucleus:nucleus:2.0.5'
     compile 'com.github.bumptech.glide:glide:3.7.0'
     compile 'com.jakewharton:butterknife:7.0.1'
-    compile 'com.jakewharton.timber:timber:4.1.0'
+    compile 'com.jakewharton.timber:timber:4.1.1'
     compile 'ch.acra:acra:4.8.2'
     compile "frankiesardo:icepick:$ICEPICK_VERSION"
     provided "frankiesardo:icepick-processor:$ICEPICK_VERSION"
     compile 'com.github.dmytrodanylyk.android-process-button:library:1.0.4'
     compile 'eu.davidea:flexible-adapter:4.2.0'
-    compile 'com.nononsenseapps:filepicker:2.5.1'
+    compile 'com.nononsenseapps:filepicker:2.5.2'
     compile 'com.github.amulyakhare:TextDrawable:558677e'
 
-    compile "org.greenrobot:eventbus:$EVENTBUS_VERSION"
-    apt "org.greenrobot:eventbus-annotation-processor:$EVENTBUS_VERSION"
+    compile "org.greenrobot:eventbus:3.0.0"
+    apt "org.greenrobot:eventbus-annotation-processor:3.0.1"
 
     compile "com.google.dagger:dagger:$DAGGER_VERSION"
     apt "com.google.dagger:dagger-compiler:$DAGGER_VERSION"
@@ -158,7 +157,7 @@ dependencies {
     // Google material icons SVG.
     compile 'com.mikepenz:google-material-typeface:2.1.0.1.original@aar'
 
-    compile('com.github.afollestad.material-dialogs:core:0.8.5.4@aar') {
+    compile('com.github.afollestad.material-dialogs:core:0.8.5.6@aar') {
         transitive = true
     }
 

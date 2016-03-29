@@ -40,6 +40,7 @@ import eu.kanade.tachiyomi.data.database.tables.MangaCategoryTable;
 import eu.kanade.tachiyomi.data.database.tables.MangaSyncTable;
 import eu.kanade.tachiyomi.data.database.tables.MangaTable;
 import eu.kanade.tachiyomi.data.mangasync.base.MangaSyncService;
+import eu.kanade.tachiyomi.data.source.base.Source;
 import eu.kanade.tachiyomi.util.ChapterRecognition;
 import rx.Observable;
 
@@ -240,13 +241,14 @@ public class DatabaseHelper {
     }
 
     // Add new chapters or delete if the source deletes them
-    public Observable<Pair<Integer, Integer>> insertOrRemoveChapters(Manga manga, List<Chapter> sourceChapters) {
+    public Observable<Pair<Integer, Integer>> insertOrRemoveChapters(Manga manga, List<Chapter> sourceChapters, Source source) {
         List<Chapter> dbChapters = getChapters(manga).executeAsBlocking();
 
         Observable<List<Chapter>> newChapters = Observable.from(sourceChapters)
                 .filter(c -> !dbChapters.contains(c))
                 .doOnNext(c -> {
                     c.manga_id = manga.id;
+                    source.parseChapterNumber(c);
                     ChapterRecognition.parseChapterNumber(c, manga);
                 })
                 .toList();
@@ -258,6 +260,7 @@ public class DatabaseHelper {
         return Observable.zip(newChapters, deletedChapters, (toAdd, toDelete) -> {
             int added = 0;
             int deleted = 0;
+            int readded = 0;
             db.internal().beginTransaction();
             try {
                 TreeSet<Float> deletedReadChapterNumbers = new TreeSet<>();
@@ -281,6 +284,7 @@ public class DatabaseHelper {
                         // Try to mark already read chapters as read when the source deletes them
                         if (c.chapter_number != -1 && deletedReadChapterNumbers.contains(c.chapter_number)) {
                             c.read = true;
+                            readded++;
                         }
                     }
                     added = insertChapters(toAdd).executeAsBlocking().numberOfInserts();
@@ -290,7 +294,7 @@ public class DatabaseHelper {
             } finally {
                 db.internal().endTransaction();
             }
-            return Pair.create(added, deleted);
+            return Pair.create(added - readded, deleted - readded);
         });
     }
 
