@@ -18,6 +18,8 @@ import java.util.regex.Pattern;
 import eu.kanade.tachiyomi.data.database.models.Chapter;
 import eu.kanade.tachiyomi.data.database.models.Manga;
 import eu.kanade.tachiyomi.data.network.ReqKt;
+import eu.kanade.tachiyomi.data.source.Language;
+import eu.kanade.tachiyomi.data.source.LanguageKt;
 import eu.kanade.tachiyomi.data.source.base.Source;
 import eu.kanade.tachiyomi.data.source.model.MangasPage;
 import eu.kanade.tachiyomi.data.source.model.Page;
@@ -28,7 +30,7 @@ import okhttp3.Request;
 
 public class Kissmanga extends Source {
 
-    public static final String NAME = "Kissmanga (EN)";
+    public static final String NAME = "Kissmanga";
     public static final String HOST = "kissmanga.com";
     public static final String IP = "93.174.95.110";
     public static final String BASE_URL = "http://" + IP;
@@ -56,6 +58,10 @@ public class Kissmanga extends Source {
         return BASE_URL;
     }
 
+    public Language getLang() {
+        return LanguageKt.getEN();
+    }
+
     @Override
     protected String getInitialPopularMangasUrl() {
         return String.format(POPULAR_MANGAS_URL, 1);
@@ -78,12 +84,12 @@ public class Kissmanga extends Source {
         form.add("status", "");
         form.add("genres", "");
 
-        return ReqKt.post(page.url, requestHeaders, form.build());
+        return ReqKt.post(page.url, getRequestHeaders(), form.build());
     }
 
     @Override
     protected Request pageListRequest(String chapterUrl) {
-        return ReqKt.post(getBaseUrl() + chapterUrl, requestHeaders);
+        return ReqKt.post(getBaseUrl() + chapterUrl, getRequestHeaders());
     }
 
     @Override
@@ -209,7 +215,7 @@ public class Kissmanga extends Source {
     }
 
     @Override
-    protected List<Page> parseFirstPage(List<Page> pages, String unparsedHtml) {
+    protected List<Page> parseFirstPage(List<? extends Page> pages, String unparsedHtml) {
         Pattern p = Pattern.compile("lstImages.push\\(\"(.+?)\"");
         Matcher m = p.matcher(unparsedHtml);
 
@@ -217,7 +223,7 @@ public class Kissmanga extends Source {
         while (m.find()) {
             pages.get(i++).setImageUrl(m.group(1));
         }
-        return pages;
+        return (List<Page>) pages;
     }
 
     @Override

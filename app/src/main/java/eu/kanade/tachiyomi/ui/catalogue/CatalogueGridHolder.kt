@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.ui.catalogue
 
 import android.view.View
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.load.model.GlideUrl
 import eu.kanade.tachiyomi.data.database.models.Manga
 import kotlinx.android.synthetic.main.item_catalogue_grid.view.*
 
@@ -13,7 +16,7 @@ import kotlinx.android.synthetic.main.item_catalogue_grid.view.*
  * @param listener a listener to react to single tap and long tap events.
  * @constructor creates a new catalogue holder.
  */
-class CatalogueGridHolder(private val view: View, adapter: CatalogueAdapter, listener: OnListItemClickListener) :
+class CatalogueGridHolder(private val view: View, private val adapter: CatalogueAdapter, listener: OnListItemClickListener) :
         CatalogueHolder(view, adapter, listener) {
 
     /**
@@ -21,19 +24,15 @@ class CatalogueGridHolder(private val view: View, adapter: CatalogueAdapter, lis
      * holder with the given manga.
      *
      * @param manga the manga to bind.
-     * @param presenter the catalogue presenter.
      */
-    override fun onSetValues(manga: Manga, presenter: CataloguePresenter) {
+    override fun onSetValues(manga: Manga) {
         // Set manga title
         view.title.text = manga.title
-
-        // Set visibility of in library icon.
-        view.favorite_sticker.visibility = if (manga.favorite) View.VISIBLE else View.GONE
 
         // Set alpha of thumbnail.
         view.thumbnail.alpha = if (manga.favorite) 0.3f else 1.0f
 
-        setImage(manga, presenter)
+        setImage(manga)
     }
 
     /**
@@ -41,14 +40,22 @@ class CatalogueGridHolder(private val view: View, adapter: CatalogueAdapter, lis
      * and the url is now known.
      *
      * @param manga the manga to bind.
-     * @param presenter the catalogue presenter.
      */
-    fun setImage(manga: Manga, presenter: CataloguePresenter) {
-        if (manga.thumbnail_url != null) {
-            presenter.coverCache.loadFromNetwork(view.thumbnail, manga.thumbnail_url,
-                    presenter.source.glideHeaders)
+    fun setImage(manga: Manga) {
+        if (!manga.thumbnail_url.isNullOrEmpty()) {
+            val url = manga.thumbnail_url!!
+            val headers = adapter.fragment.presenter.source.glideHeaders
+
+            Glide.with(view.context)
+                    .load(if (headers != null) GlideUrl(url, headers) else url)
+                    .diskCacheStrategy(DiskCacheStrategy.SOURCE)
+                    .centerCrop()
+                    .skipMemoryCache(true)
+                    .placeholder(android.R.color.transparent)
+                    .into(view.thumbnail)
+
         } else {
-            view.thumbnail.setImageResource(android.R.color.transparent)
+            Glide.clear(view.thumbnail)
         }
     }
 }

@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.ui.setting
 
+import android.app.FragmentManager
+import android.os.Build
 import android.os.Bundle
-import android.preference.PreferenceFragment
+import android.support.v14.preference.PreferenceFragment
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 
 open class SettingsNestedFragment : PreferenceFragment() {
@@ -19,8 +21,7 @@ open class SettingsNestedFragment : PreferenceFragment() {
 
     }
 
-    override fun onCreate(savedState: Bundle?) {
-        super.onCreate(savedState)
+    override fun onCreatePreferences(savedState: Bundle?, s: String?) {
         addPreferencesFromResource(arguments.getInt(RESOURCE_FILE))
     }
 
@@ -41,4 +42,7 @@ open class SettingsNestedFragment : PreferenceFragment() {
 
     val preferences: PreferencesHelper
         get() = settingsActivity.preferences
+
+    val fragmentManagerCompat: FragmentManager
+        get() = if (Build.VERSION.SDK_INT >= 17) childFragmentManager else fragmentManager
 }

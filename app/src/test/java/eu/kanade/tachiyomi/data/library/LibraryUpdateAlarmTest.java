@@ -6,7 +6,6 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.SystemClock;
 
-import org.assertj.core.data.Offset;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -102,6 +101,7 @@ public class LibraryUpdateAlarmTest {
     @Test
     public void testLibraryUpdateServiceIsStartedWhenUpdateIntentIsReceived() {
         Intent intent = new Intent(context, LibraryUpdateService.class);
+        intent.putExtra("is_forced", false);
         assertThat(app.getNextStartedService()).isNotEqualTo(intent);
 
         LibraryUpdateAlarm alarm = new LibraryUpdateAlarm();
@@ -132,9 +132,9 @@ public class LibraryUpdateAlarmTest {
         long shouldRunAt = SystemClock.elapsedRealtime() + (hours * 60 * 60 * 1000);
 
         // Margin error of 3 seconds
-        Offset<Long> offset = Offset.offset(3 * 1000L);
-
-        assertThat(alarmManager.getNextScheduledAlarm().triggerAtTime).isCloseTo(shouldRunAt, offset);
+        assertThat(alarmManager.getNextScheduledAlarm().triggerAtTime)
+                .isGreaterThan(shouldRunAt - 3000)
+                .isLessThan(shouldRunAt + 3000);
     }
 
 }

@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.support.v7.view.ActionMode
-import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.RecyclerView
 import android.support.v7.widget.helper.ItemTouchHelper
 import android.view.Menu
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.data.database.models.Category
 import eu.kanade.tachiyomi.ui.base.activity.BaseRxActivity
 import eu.kanade.tachiyomi.ui.base.adapter.FlexibleViewHolder
 import eu.kanade.tachiyomi.ui.base.adapter.OnStartDragListener
+import eu.kanade.tachiyomi.widget.NpaLinearLayoutManager
 import kotlinx.android.synthetic.main.activity_edit_categories.*
 import kotlinx.android.synthetic.main.toolbar.*
 import nucleus.factory.RequiresPresenter
@@ -57,6 +57,7 @@ class CategoryActivity : BaseRxActivity<CategoryPresenter>(), ActionMode.Callbac
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setAppTheme()
         super.onCreate(savedInstanceState)
 
         // Inflate activity_edit_categories.xml.
@@ -69,7 +70,7 @@ class CategoryActivity : BaseRxActivity<CategoryPresenter>(), ActionMode.Callbac
         adapter = CategoryAdapter(this)
 
         // Create view and inject category items into view
-        recycler.layoutManager = LinearLayoutManager(this)
+        recycler.layoutManager = NpaLinearLayoutManager(this)
         recycler.setHasFixedSize(true)
         recycler.adapter = adapter
 
@@ -81,7 +82,7 @@ class CategoryActivity : BaseRxActivity<CategoryPresenter>(), ActionMode.Callbac
         fab.setOnClickListener({ v ->
             MaterialDialog.Builder(this)
                     .title(R.string.action_add_category)
-                    .negativeText(R.string.button_cancel)
+                    .negativeText(android.R.string.cancel)
                     .input(R.string.name, 0, false)
                     { dialog, input -> presenter.createCategory(input.toString()) }
                     .show()
@@ -124,7 +125,7 @@ class CategoryActivity : BaseRxActivity<CategoryPresenter>(), ActionMode.Callbac
     private fun editCategory(category: Category) {
         MaterialDialog.Builder(this)
                 .title(R.string.action_rename_category)
-                .negativeText(R.string.button_cancel)
+                .negativeText(android.R.string.cancel)
                 .onNegative { materialDialog, dialogAction -> destroyActionModeIfNeeded() }
                 .input(getString(R.string.name), category.name, false)
                 { dialog, input -> presenter.renameCategory(category, input.toString()) }

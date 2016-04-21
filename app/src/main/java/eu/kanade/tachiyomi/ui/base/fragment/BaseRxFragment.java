@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.base.fragment;
 
 import android.os.Bundle;
+import android.support.v4.app.Fragment;
 
 import eu.kanade.tachiyomi.App;
 import eu.kanade.tachiyomi.ui.base.presenter.BasePresenter;
@@ -11,7 +12,7 @@ import nucleus.view.PresenterLifecycleDelegate;
 import nucleus.view.ViewWithPresenter;
 
 /**
- * This class is an example of how an activity could controls it's presenter.
+ * This view is an example of how a view should control it's presenter.
  * You can inherit from this class or copy/paste this class's code to
  * create your own view implementation.
  *
@@ -55,12 +56,15 @@ public abstract class BaseRxFragment<P extends Presenter> extends BaseFragment i
     @Override
     public void onCreate(Bundle bundle) {
         final PresenterFactory<P> superFactory = getPresenterFactory();
-        setPresenterFactory(() -> {
-            P presenter = superFactory.createPresenter();
-            App app = (App) getActivity().getApplication();
-            app.getComponentReflection().inject(presenter);
-            ((BasePresenter)presenter).setContext(app.getApplicationContext());
-            return presenter;
+        setPresenterFactory(new PresenterFactory<P>() {
+            @Override
+            public P createPresenter() {
+                P presenter = superFactory.createPresenter();
+                App app = (App) getActivity().getApplication();
+                app.getComponentReflection().inject(presenter);
+                ((BasePresenter) presenter).setContext(app.getApplicationContext());
+                return presenter;
+            }
         });
 
         super.onCreate(bundle);
@@ -83,6 +87,11 @@ public abstract class BaseRxFragment<P extends Presenter> extends BaseFragment i
     @Override
     public void onPause() {
         super.onPause();
-        presenterDelegate.onPause(getActivity().isFinishing());
+        presenterDelegate.onPause(getActivity().isFinishing() || isRemoving(this));
+    }
+
+    private static boolean isRemoving(Fragment fragment) {
+        Fragment parent = fragment.getParentFragment();
+        return fragment.isRemoving() || (parent != null && isRemoving(parent));
     }
 }

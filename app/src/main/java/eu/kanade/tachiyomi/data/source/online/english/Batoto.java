@@ -28,6 +28,8 @@ import java.util.regex.Pattern;
 import eu.kanade.tachiyomi.data.database.models.Chapter;
 import eu.kanade.tachiyomi.data.database.models.Manga;
 import eu.kanade.tachiyomi.data.network.ReqKt;
+import eu.kanade.tachiyomi.data.source.Language;
+import eu.kanade.tachiyomi.data.source.LanguageKt;
 import eu.kanade.tachiyomi.data.source.base.LoginSource;
 import eu.kanade.tachiyomi.data.source.model.MangasPage;
 import eu.kanade.tachiyomi.data.source.model.Page;
@@ -37,10 +39,11 @@ import okhttp3.Headers;
 import okhttp3.Request;
 import okhttp3.Response;
 import rx.Observable;
+import rx.functions.Func1;
 
 public class Batoto extends LoginSource {
 
-    public static final String NAME = "Batoto (EN)";
+    public static final String NAME = "Batoto";
     public static final String BASE_URL = "http://bato.to";
     public static final String POPULAR_MANGAS_URL = BASE_URL + "/search_ajax?order_cond=views&order=desc&p=%s";
     public static final String SEARCH_URL = BASE_URL + "/search_ajax?name=%s&p=%s";
@@ -79,6 +82,10 @@ public class Batoto extends LoginSource {
         return BASE_URL;
     }
 
+    public Language getLang() {
+        return LanguageKt.getEN();
+    }
+
     @Override
     protected Headers.Builder headersBuilder() {
         Headers.Builder builder = super.headersBuilder();
@@ -100,13 +107,13 @@ public class Batoto extends LoginSource {
     @Override
     protected Request mangaDetailsRequest(String mangaUrl) {
         String mangaId = mangaUrl.substring(mangaUrl.lastIndexOf("r") + 1);
-        return ReqKt.get(String.format(MANGA_URL, mangaId), requestHeaders);
+        return ReqKt.get(String.format(MANGA_URL, mangaId), getRequestHeaders());
     }
 
     @Override
     protected Request pageListRequest(String pageUrl) {
         String id = pageUrl.substring(pageUrl.indexOf("#") + 1);
-        return ReqKt.get(String.format(CHAPTER_URL, id), requestHeaders);
+        return ReqKt.get(String.format(CHAPTER_URL, id), getRequestHeaders());
     }
 
     @Override
@@ -115,7 +122,7 @@ public class Batoto extends LoginSource {
         int start = pageUrl.indexOf("#") + 1;
         int end = pageUrl.indexOf("_", start);
         String id = pageUrl.substring(start, end);
-        return ReqKt.get(String.format(PAGE_URL, id, pageUrl.substring(end+1)), requestHeaders);
+        return ReqKt.get(String.format(PAGE_URL, id, pageUrl.substring(end+1)), getRequestHeaders());
     }
 
     private List<Manga> parseMangasFromHtml(Document parsedHtml) {
@@ -287,7 +294,7 @@ public class Batoto extends LoginSource {
     }
 
     @Override
-    protected List<Page> parseFirstPage(List<Page> pages, String unparsedHtml) {
+    protected List<Page> parseFirstPage(List<? extends Page> pages, String unparsedHtml) {
         if (!unparsedHtml.contains("Want to see this chapter per page instead?")) {
             String firstImage = parseHtmlToImageUrl(unparsedHtml);
             pages.get(0).setImageUrl(firstImage);
@@ -299,7 +306,7 @@ public class Batoto extends LoginSource {
                 pages.get(i).setImageUrl(imageUrls.get(i).attr("src"));
             }
         }
-        return pages;
+        return (List<Page>) pages;
     }
 
     @Override
@@ -314,10 +321,16 @@ public class Batoto extends LoginSource {
     }
 
     @Override
-    public Observable<Boolean> login(String username, String password) {
-        return networkService.requestBody(ReqKt.get(LOGIN_URL, requestHeaders))
-                .flatMap(response -> doLogin(response, username, password))
-                .map(this::isAuthenticationSuccessful);
+    public Observable<Boolean> login(final String username, final String password) {
+        return getNetworkService().requestBody(ReqKt.get(LOGIN_URL, getRequestHeaders()))
+                .flatMap(new Func1<String, Observable<Response>>() {
+                    @Override
+                    public Observable<Response> call(String response) {return doLogin(response, username, password);}
+                })
+                .map(new Func1<Response, Boolean>() {
+                    @Override
+                    public Boolean call(Response resp) {return isAuthenticationSuccessful(resp);}
+                });
     }
 
     private Observable<Response> doLogin(String response, String username, String password) {
@@ -334,7 +347,7 @@ public class Batoto extends LoginSource {
         formBody.add("invisible", "1");
         formBody.add("rememberMe", "1");
 
-        return networkService.request(ReqKt.post(postUrl, requestHeaders, formBody.build()));
+        return getNetworkService().request(ReqKt.post(postUrl, getRequestHeaders(), formBody.build()));
     }
 
     @Override
@@ -345,7 +358,7 @@ public class Batoto extends LoginSource {
     @Override
     public boolean isLogged() {
         try {
-            for ( HttpCookie cookie : networkService.getCookies().get(new URI(BASE_URL)) ) {
+            for ( HttpCookie cookie : getNetworkService().getCookies().get(new URI(BASE_URL)) ) {
                 if (cookie.getName().equals("pass_hash"))
                     return true;
             }
@@ -357,16 +370,19 @@ public class Batoto extends LoginSource {
     }
 
     @Override
-    public Observable<List<Chapter>> pullChaptersFromNetwork(String mangaUrl) {
+    public Observable<List<Chapter>> pullChaptersFromNetwork(final String mangaUrl) {
         Observable<List<Chapter>> observable;
-        String username = prefs.getSourceUsername(this);
-        String password = prefs.getSourcePassword(this);
+        String username = getPrefs().sourceUsername(this);
+        String password = getPrefs().sourcePassword(this);
         if (username.isEmpty() && password.isEmpty()) {
             observable = Observable.error(new Exception("User not logged"));
         }
         else if (!isLogged()) {
             observable = login(username, password)
-                    .flatMap(result -> super.pullChaptersFromNetwork(mangaUrl));
+                    .flatMap(new Func1<Boolean, Observable<? extends List<Chapter>>>() {
+                        @Override
+                        public Observable<? extends List<Chapter>> call(Boolean result) {return Batoto.super.pullChaptersFromNetwork(mangaUrl);}
+                    });
         }
         else {
             observable = super.pullChaptersFromNetwork(mangaUrl);

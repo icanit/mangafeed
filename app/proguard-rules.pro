@@ -2,9 +2,6 @@
 
 -keep class eu.kanade.tachiyomi.injection.** { *; }
 
-# Retrolambda
--dontwarn java.lang.invoke.*
-
 # OkHttp
 -keepattributes Signature
 -keepattributes *Annotation*
@@ -19,38 +16,6 @@
 -dontwarn org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement
 -dontwarn okio.**
 
-# ButterKnife 7
--keep class butterknife.** { *; }
--dontwarn butterknife.internal.**
--keep class **$$ViewBinder { *; }
-
--keepclasseswithmembernames class * {
-    @butterknife.* <fields>;
-}
-
--keepclasseswithmembernames class * {
-    @butterknife.* <methods>;
-}
-
-#Easy-Adapter v1.5.0
--keepattributes *Annotation*
--keepclassmembers class * extends uk.co.ribot.easyadapter.ItemViewHolder {
-    public <init>(...);
- }
-
-## GreenRobot EventBus specific rules ##
-# http://greenrobot.org/eventbus/documentation/proguard/
--keepattributes *Annotation*
--keepclassmembers class ** {
-    @org.greenrobot.eventbus.Subscribe <methods>;
-}
--keep enum org.greenrobot.eventbus.ThreadMode { *; }
-
-# Only required if you use AsyncExecutor
--keepclassmembers class * extends org.greenrobot.eventbus.util.ThrowableFailureEvent {
-    <init>(java.lang.Throwable);
-}
-
 # Glide specific rules #
 # https://github.com/bumptech/glide
 -keep public class * implements com.bumptech.glide.module.GlideModule
@@ -60,7 +25,6 @@
 }
 
 # RxJava 1.1.0
-
 -dontwarn sun.misc.**
 
 -keepclassmembers class rx.internal.util.unsafe.*ArrayQueue*Field* {
@@ -76,26 +40,17 @@
     rx.internal.util.atomic.LinkedQueueNode consumerNode;
 }
 
-# Retrofit 1.X
+# Retrofit 2.X
+## https://square.github.io/retrofit/ ##
 
--keep class com.squareup.okhttp.** { *; }
--keep class retrofit.** { *; }
--keep interface com.squareup.okhttp.** { *; }
-
--dontwarn com.squareup.okhttp.**
--dontwarn okio.**
--dontwarn retrofit.**
--dontwarn rx.**
-
--keepclasseswithmembers class * {
-    @retrofit.http.* <methods>;
-}
-
-# If in your rest service interface you use methods with Callback argument.
+-dontwarn retrofit2.**
+-keep class retrofit2.** { *; }
+-keepattributes Signature
 -keepattributes Exceptions
 
-# If your rest service methods throw custom exceptions, because you've defined an ErrorHandler.
--keepattributes Signature
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
 
 # AppCombat
 -keep public class android.support.v7.widget.** { *; }
@@ -104,13 +59,6 @@
 
 -keep public class * extends android.support.v4.view.ActionProvider {
     public <init>(android.content.Context);
-}
-
-# Icepick
--dontwarn icepick.**
--keep class **$$Icepick { *; }
--keepclasseswithmembernames class * {
-    @icepick.* <fields>;
 }
 
 ## GSON 2.2.4 specific rules ##

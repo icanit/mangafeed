@@ -7,11 +7,12 @@ import eu.kanade.tachiyomi.data.database.models.Manga
 import eu.kanade.tachiyomi.data.database.models.MangaChapter
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
+import eu.kanade.tachiyomi.data.preference.PreferencesHelper
 import eu.kanade.tachiyomi.data.source.SourceManager
 import eu.kanade.tachiyomi.event.DownloadChaptersEvent
 import eu.kanade.tachiyomi.event.ReaderEvent
 import eu.kanade.tachiyomi.ui.base.presenter.BasePresenter
-import org.greenrobot.eventbus.EventBus
+import eu.kanade.tachiyomi.util.SharedData
 import rx.Observable
 import rx.android.schedulers.AndroidSchedulers
 import rx.schedulers.Schedulers
@@ -24,6 +25,11 @@ class RecentChaptersPresenter : BasePresenter<RecentChaptersFragment>() {
      * Used to connect to database
      */
     @Inject lateinit var db: DatabaseHelper
+
+    /**
+     * Used to get settings
+     */
+    @Inject lateinit var preferences: PreferencesHelper
 
     /**
      * Used to get information from download manager
@@ -88,7 +94,7 @@ class RecentChaptersPresenter : BasePresenter<RecentChaptersFragment>() {
      * @return download object containing download progress.
      */
     private fun getChapterStatusObs(): Observable<Download> {
-        return downloadManager.queue.statusObservable
+        return downloadManager.queue.getStatusObservable()
                 .observeOn(AndroidSchedulers.mainThread())
                 .filter { download: Download ->
                     if (chapterIdEquals(download.chapter.id))
@@ -188,7 +194,7 @@ class RecentChaptersPresenter : BasePresenter<RecentChaptersFragment>() {
         }
 
         // Get source of chapter
-        val source = sourceManager.get(mangaChapter.manga.source)
+        val source = sourceManager.get(mangaChapter.manga.source)!!
 
         // Check if chapter is downloaded
         if (downloadManager.isChapterDownloaded(source, mangaChapter.manga, mangaChapter.chapter)) {
@@ -212,10 +218,10 @@ class RecentChaptersPresenter : BasePresenter<RecentChaptersFragment>() {
                 // Group chapters by the date they were fetched on a ordered map.
                 .flatMap { recentItems ->
                     Observable.from(recentItems)
-                            .toMultimap {
-                                recent ->
-                                (getMapKey(recent.chapter.date_fetch))
-                            }
+                            .toMultimap(
+                                    { getMapKey(it.chapter.date_fetch) },
+                                    { it },
+                                    { TreeMap { d1, d2 -> d2.compareTo(d1) } })
                 }
                 // Add every day and all its chapters to a single list.
                 .map { recentItems ->
@@ -250,8 +256,7 @@ class RecentChaptersPresenter : BasePresenter<RecentChaptersFragment>() {
      * @param item chapter that is opened
      */
     fun onOpenChapter(item: MangaChapter) {
-        val source = sourceManager.get(item.manga.source)
-        EventBus.getDefault().postSticky(ReaderEvent(source, item.manga, item.chapter))
+        SharedData.put(ReaderEvent(item.manga, item.chapter))
     }
 
     /**
@@ -261,7 +266,9 @@ class RecentChaptersPresenter : BasePresenter<RecentChaptersFragment>() {
      * @param manga manga that belongs to chapter
      */
     fun downloadChapter(selectedChapter: Observable<Chapter>, manga: Manga) {
-        add(selectedChapter.toList().subscribe { chapters -> EventBus.getDefault().postSticky(DownloadChaptersEvent(manga, chapters)) })
+        add(selectedChapter.toList()
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe { downloadManager.onDownloadChaptersEvent(DownloadChaptersEvent(manga, it)) })
     }
 
     /**
@@ -271,7 +278,7 @@ class RecentChaptersPresenter : BasePresenter<RecentChaptersFragment>() {
      * @param manga manga that belongs to chapter
      */
     fun deleteChapter(chapter: Chapter, manga: Manga) {
-        val source = sourceManager.get(manga.source)
+        val source = sourceManager.get(manga.source)!!
         downloadManager.deleteChapter(source, manga, chapter)
     }
 
@@ -282,8 +289,8 @@ class RecentChaptersPresenter : BasePresenter<RecentChaptersFragment>() {
     fun deleteChapters(selectedChapters: Observable<Chapter>) {
         add(selectedChapters
                 .subscribe(
-                        { chapter -> downloadManager.queue.remove(chapter) })
-                { error -> Timber.e(error.message) })
+                        { chapter -> downloadManager.queue.del(chapter) })
+                        { error -> Timber.e(error.message) })
     }
 
     /**
@@ -292,15 +299,16 @@ class RecentChaptersPresenter : BasePresenter<RecentChaptersFragment>() {
      * *
      * @param read read status
      */
-    fun markChaptersRead(selectedChapters: Observable<Chapter>, read: Boolean) {
-        add(selectedChapters
-                .subscribeOn(Schedulers.io())
-                .map { chapter ->
+    fun markChaptersRead(selectedChapters: Observable<Chapter>, manga: Manga, read: Boolean) {
+        add(selectedChapters.subscribeOn(Schedulers.io())
+                .doOnNext { chapter ->
                     chapter.read = read
-                    if (!read) {
-                        chapter.last_page_read = 0
+                    if (!read) chapter.last_page_read = 0
+
+                    // Delete chapter when marked as read if desired by user.
+                    if (preferences.removeAfterMarkedAsRead() && read) {
+                        deleteChapter(chapter,manga)
                     }
-                    chapter
                 }
                 .toList()
                 .flatMap { chapters -> db.insertChapters(chapters).asRxObservable() }

@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.ui.catalogue
 
 import android.os.Bundle
-import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.database.DatabaseHelper
 import eu.kanade.tachiyomi.data.database.models.Manga
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
+import eu.kanade.tachiyomi.data.preference.getOrDefault
 import eu.kanade.tachiyomi.data.source.SourceManager
 import eu.kanade.tachiyomi.data.source.base.Source
 import eu.kanade.tachiyomi.data.source.model.MangasPage
@@ -33,11 +33,6 @@ class CataloguePresenter : BasePresenter<CatalogueFragment>() {
     @Inject lateinit var db: DatabaseHelper
 
     /**
-     * Cover cache.
-     */
-    @Inject lateinit var coverCache: CoverCache
-
-    /**
      * Preferences.
      */
     @Inject lateinit var prefs: PreferencesHelper
@@ -45,7 +40,7 @@ class CataloguePresenter : BasePresenter<CatalogueFragment>() {
     /**
      * Enabled sources.
      */
-    private val sources by lazy { sourceManager.sources }
+    val sources by lazy { getEnabledSources() }
 
     /**
      * Active source.
@@ -189,6 +184,13 @@ class CataloguePresenter : BasePresenter<CatalogueFragment>() {
     }
 
     /**
+     * Retry a failed request.
+     */
+    fun retryRequest() {
+        start(GET_MANGA_PAGE)
+    }
+
+    /**
      * Returns the observable of the network request for a page.
      *
      * @param page the page number to request.
@@ -203,7 +205,7 @@ class CataloguePresenter : BasePresenter<CatalogueFragment>() {
         val obs = if (query.isNullOrEmpty())
             source.pullPopularMangasFromNetwork(nextMangasPage)
         else
-            source.searchMangasFromNetwork(nextMangasPage, query)
+            source.searchMangasFromNetwork(nextMangasPage, query!!)
 
         return obs.subscribeOn(Schedulers.io())
                 .doOnNext { lastMangasPage = it }
@@ -286,7 +288,7 @@ class CataloguePresenter : BasePresenter<CatalogueFragment>() {
         if (!isLoginRequired || isLogged)
             return true
 
-        prefs.getSourceUsername(this) != "" && prefs.getSourcePassword(this) != ""
+        prefs.sourceUsername(this) != "" && prefs.sourcePassword(this) != ""
     }
 
     /**
@@ -308,12 +310,19 @@ class CataloguePresenter : BasePresenter<CatalogueFragment>() {
     }
 
     /**
-     * Returns a list of enabled sources.
-     *
-     * TODO filter by enabled sources.
+     * Returns a list of enabled sources ordered by language and name.
      */
-    fun getEnabledSources(): List<Source> {
-        return sourceManager.sources
+    private fun getEnabledSources(): List<Source> {
+        val languages = prefs.enabledLanguages().getOrDefault()
+
+        // Ensure at least one language
+        if (languages.isEmpty()) {
+            languages.add("EN")
+        }
+
+        return sourceManager.getSources()
+                .filter { it.lang.code in languages }
+                .sortedBy { "(${it.lang.code}) ${it.name}" }
     }
 
     /**

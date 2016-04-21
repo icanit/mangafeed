@@ -9,13 +9,11 @@ import com.f2prateek.rx.preferences.Preference
 import eu.davidea.flexibleadapter.FlexibleAdapter
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.Manga
-import eu.kanade.tachiyomi.event.LibraryMangasEvent
+import eu.kanade.tachiyomi.event.LibraryMangaEvent
 import eu.kanade.tachiyomi.ui.base.adapter.FlexibleViewHolder
 import eu.kanade.tachiyomi.ui.base.fragment.BaseFragment
 import eu.kanade.tachiyomi.ui.manga.MangaActivity
 import kotlinx.android.synthetic.main.fragment_library_category.*
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
 import rx.Subscription
 import java.util.*
 
@@ -43,6 +41,11 @@ class LibraryCategoryFragment : BaseFragment(), FlexibleViewHolder.OnListItemCli
         set(value) {
             field = value ?: ArrayList()
         }
+
+    /**
+     * Subscription for the library manga.
+     */
+    private var libraryMangaSubscription: Subscription? = null
 
     /**
      * Subscription of the number of manga per row.
@@ -115,11 +118,12 @@ class LibraryCategoryFragment : BaseFragment(), FlexibleViewHolder.OnListItemCli
 
     override fun onResume() {
         super.onResume()
-        registerForEvents()
+        libraryMangaSubscription = libraryPresenter.libraryMangaSubject
+                .subscribe { if (it != null) onNextLibraryManga(it) }
     }
 
     override fun onPause() {
-        unregisterForEvents()
+        libraryMangaSubscription?.unsubscribe()
         super.onPause()
     }
 
@@ -130,13 +134,12 @@ class LibraryCategoryFragment : BaseFragment(), FlexibleViewHolder.OnListItemCli
     }
 
     /**
-     * Subscribe to [LibraryMangasEvent]. When an event is received, it updates [mangas] if needed
+     * Subscribe to [LibraryMangaEvent]. When an event is received, it updates [mangas] if needed
      * and refresh the content of the adapter.
      *
      * @param event the event received.
      */
-    @Subscribe(sticky = true, threadMode = ThreadMode.MAIN)
-    fun onEvent(event: LibraryMangasEvent) {
+    fun onNextLibraryManga(event: LibraryMangaEvent) {
         // Get the categories from the parent fragment.
         val categories = libraryFragment.adapter.categories ?: return
 
@@ -150,7 +153,7 @@ class LibraryCategoryFragment : BaseFragment(), FlexibleViewHolder.OnListItemCli
         // adapter after every onResume.
         if (mangas !== mangaForCategory) {
             mangas = mangaForCategory
-            mangas?.let { adapter.setItems(it) }
+            adapter.setItems(mangas ?: emptyList())
         }
     }
 
@@ -162,13 +165,12 @@ class LibraryCategoryFragment : BaseFragment(), FlexibleViewHolder.OnListItemCli
      */
     override fun onListItemClick(position: Int): Boolean {
         // If the action mode is created and the position is valid, toggle the selection.
-        if (position == -1) {
-            return false
-        } else if (libraryFragment.actionMode != null) {
+        val item = adapter.getItem(position) ?: return false
+        if (libraryFragment.actionMode != null) {
             toggleSelection(position)
             return true
         } else {
-            openManga(adapter.getItem(position))
+            openManga(item)
             return false
         }
     }

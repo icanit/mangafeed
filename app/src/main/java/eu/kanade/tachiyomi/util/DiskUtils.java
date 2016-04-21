@@ -5,10 +5,6 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-import okio.BufferedSink;
-import okio.BufferedSource;
-import okio.Okio;
-
 public final class DiskUtils {
 
     private DiskUtils() {
@@ -38,35 +34,7 @@ public final class DiskUtils {
         }
         return sb.toString();
     }
-
-    public static File saveBufferedSourceToDirectory(BufferedSource bufferedSource, File directory, String name) throws IOException {
-        createDirectory(directory);
-
-        File writeFile = new File(directory, name);
-        if (writeFile.exists()) {
-            if (writeFile.delete()) {
-                writeFile = new File(directory, name);
-            } else {
-                throw new IOException("Failed Deleting Existing File for Overwrite");
-            }
-        }
-
-        BufferedSink bufferedSink = null;
-        try {
-            bufferedSink = Okio.buffer(Okio.sink(writeFile));
-            bufferedSink.writeAll(bufferedSource);
-        } catch (Exception e) {
-            writeFile.delete();
-            throw new IOException("Unable to save image");
-        } finally {
-            if (bufferedSink != null) {
-                bufferedSink.close();
-            }
-        }
-
-        return writeFile;
-    }
-
+    
     public static void deleteFiles(File inputFile) {
         if (inputFile.isDirectory()) {
             for (File childFile : inputFile.listFiles()) {
@@ -74,6 +42,7 @@ public final class DiskUtils {
             }
         }
 
+        //noinspection ResultOfMethodCallIgnored
         inputFile.delete();
     }
 

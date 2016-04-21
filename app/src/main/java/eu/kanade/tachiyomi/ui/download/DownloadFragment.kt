@@ -1,12 +1,13 @@
 package eu.kanade.tachiyomi.ui.download
 
 import android.os.Bundle
-import android.support.v7.widget.LinearLayoutManager
 import android.view.*
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.DownloadService
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.ui.base.fragment.BaseRxFragment
+import eu.kanade.tachiyomi.ui.main.MainActivity
+import eu.kanade.tachiyomi.widget.NpaLinearLayoutManager
 import kotlinx.android.synthetic.main.fragment_download_queue.*
 import nucleus.factory.RequiresPresenter
 import rx.Subscription
@@ -60,8 +61,8 @@ class DownloadFragment : BaseRxFragment<DownloadPresenter>() {
         }
     }
 
-    override fun onCreate(bundle: Bundle?) {
-        super.onCreate(bundle)
+    override fun onCreate(savedState: Bundle?) {
+        super.onCreate(savedState)
         setHasOptionsMenu(true)
     }
 
@@ -73,12 +74,15 @@ class DownloadFragment : BaseRxFragment<DownloadPresenter>() {
     override fun onViewCreated(view: View, savedState: Bundle?) {
         setToolbarTitle(R.string.label_download_queue)
 
+        // Check if download queue is empty and update information accordingly.
+        setInformationView()
+
         // Initialize adapter.
         adapter = DownloadAdapter(activity)
         recycler.adapter = adapter
 
         // Set the layout manager for the recycler and fixed size.
-        recycler.layoutManager = LinearLayoutManager(activity)
+        recycler.layoutManager = NpaLinearLayoutManager(activity)
         recycler.setHasFixedSize(true)
     }
 
@@ -137,6 +141,10 @@ class DownloadFragment : BaseRxFragment<DownloadPresenter>() {
         isRunning = running
         startButton?.isVisible = !running && !presenter.downloadQueue.isEmpty()
         pauseButton?.isVisible = running
+        clearButton?.isVisible = running
+
+        // Check if download queue is empty and update information accordingly.
+        setInformationView()
     }
 
     /**
@@ -174,6 +182,14 @@ class DownloadFragment : BaseRxFragment<DownloadPresenter>() {
      */
     private fun getHolder(download: Download): DownloadHolder? {
         return recycler.findViewHolderForItemId(download.chapter.id) as? DownloadHolder
+    }
+
+    /**
+     * Set information view when queue is empty
+     */
+    private fun setInformationView() {
+        (activity as MainActivity).updateEmptyView(presenter.downloadQueue.isEmpty(),
+                R.string.information_no_downloads, R.drawable.ic_file_download_black_128dp)
     }
 
 }

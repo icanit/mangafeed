@@ -1,9 +1,8 @@
 package eu.kanade.tachiyomi.ui.catalogue
 
+import android.content.res.Configuration
 import android.os.Bundle
-import android.support.v4.content.ContextCompat
 import android.support.v7.widget.GridLayoutManager
-import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.SearchView
 import android.support.v7.widget.Toolbar
 import android.view.*
@@ -13,6 +12,7 @@ import android.widget.ArrayAdapter
 import android.widget.ProgressBar
 import android.widget.Spinner
 import com.afollestad.materialdialogs.MaterialDialog
+import com.f2prateek.rx.preferences.Preference
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.Manga
 import eu.kanade.tachiyomi.ui.base.adapter.FlexibleViewHolder
@@ -20,10 +20,14 @@ import eu.kanade.tachiyomi.ui.base.decoration.DividerItemDecoration
 import eu.kanade.tachiyomi.ui.base.fragment.BaseRxFragment
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.manga.MangaActivity
-import eu.kanade.tachiyomi.util.ToastUtil
+import eu.kanade.tachiyomi.util.getResourceDrawable
+import eu.kanade.tachiyomi.util.snack
+import eu.kanade.tachiyomi.util.toast
 import eu.kanade.tachiyomi.widget.EndlessGridScrollListener
 import eu.kanade.tachiyomi.widget.EndlessListScrollListener
+import eu.kanade.tachiyomi.widget.NpaLinearLayoutManager
 import kotlinx.android.synthetic.main.fragment_catalogue.*
+import kotlinx.android.synthetic.main.toolbar.*
 import nucleus.factory.RequiresPresenter
 import rx.Subscription
 import rx.android.schedulers.AndroidSchedulers
@@ -82,6 +86,11 @@ class CatalogueFragment : BaseRxFragment<CataloguePresenter>(), FlexibleViewHold
      * Subscription of the debouncer subject.
      */
     private var queryDebouncerSubscription: Subscription? = null
+
+    /**
+     * Subscription of the number of manga per row.
+     */
+    private var numColumnsSubscription: Subscription? = null
 
     /**
      * Display mode of the catalogue (list or grid mode).
@@ -148,18 +157,23 @@ class CatalogueFragment : BaseRxFragment<CataloguePresenter>(), FlexibleViewHold
         catalogue_grid.adapter = adapter
         catalogue_grid.addOnScrollListener(gridScrollListener)
 
-        val llm = LinearLayoutManager(activity)
+        val llm = NpaLinearLayoutManager(activity)
         listScrollListener = EndlessListScrollListener(llm, { requestNextPage() })
         catalogue_list.setHasFixedSize(true)
         catalogue_list.adapter = adapter
         catalogue_list.layoutManager = llm
         catalogue_list.addOnScrollListener(listScrollListener)
-        catalogue_list.addItemDecoration(DividerItemDecoration(
-                ContextCompat.getDrawable(context, R.drawable.line_divider)))
+        catalogue_list.addItemDecoration(DividerItemDecoration(context.theme.getResourceDrawable(R.attr.divider_drawable)))
 
         if (presenter.isListMode) {
             switcher.showNext()
         }
+
+        numColumnsSubscription = getColumnsPreferenceForCurrentOrientation().asObservable()
+                .doOnNext { catalogue_grid.spanCount = it }
+                .skip(1)
+                // Set again the adapter to recalculate the covers height
+                .subscribe { catalogue_grid.adapter = adapter }
 
         switcher.inAnimation = AnimationUtils.loadAnimation(activity, android.R.anim.fade_in)
         switcher.outAnimation = AnimationUtils.loadAnimation(activity, android.R.anim.fade_out)
@@ -168,17 +182,17 @@ class CatalogueFragment : BaseRxFragment<CataloguePresenter>(), FlexibleViewHold
         val themedContext = baseActivity.supportActionBar?.themedContext ?: activity
 
         val spinnerAdapter = ArrayAdapter(themedContext,
-                android.R.layout.simple_spinner_item, presenter.getEnabledSources())
+                android.R.layout.simple_spinner_item, presenter.sources)
         spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
 
         val onItemSelected = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View, position: Int, id: Long) {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
                 val source = spinnerAdapter.getItem(position)
                 if (selectedIndex != position || adapter.isEmpty) {
                     // Set previous selection if it's not a valid source and notify the user
                     if (!presenter.isValidSource(source)) {
                         spinner.setSelection(presenter.findFirstValidSource())
-                        ToastUtil.showShort(activity, R.string.source_requires_login)
+                        context.toast(R.string.source_requires_login)
                     } else {
                         selectedIndex = position
                         presenter.setEnabledSource(selectedIndex)
@@ -265,6 +279,7 @@ class CatalogueFragment : BaseRxFragment<CataloguePresenter>(), FlexibleViewHold
     }
 
     override fun onDestroyView() {
+        numColumnsSubscription?.unsubscribe()
         searchItem?.let {
             if (it.isActionViewExpanded) it.collapseActionView()
         }
@@ -353,8 +368,14 @@ class CatalogueFragment : BaseRxFragment<CataloguePresenter>(), FlexibleViewHold
      */
     fun onAddPageError(error: Throwable) {
         hideProgressBar()
-        ToastUtil.showShort(context, error.message)
         Timber.e(error, error.message)
+
+        catalogue_view.snack(error.message ?: "") {
+            setAction(R.string.action_retry) {
+                showProgressBar()
+                presenter.retryRequest()
+            }
+        }
     }
 
     /**
@@ -363,7 +384,7 @@ class CatalogueFragment : BaseRxFragment<CataloguePresenter>(), FlexibleViewHold
      * @param manga the manga initialized
      */
     fun onMangaInitialized(manga: Manga) {
-        getHolder(manga)?.setImage(manga, presenter)
+        getHolder(manga)?.setImage(manga)
     }
 
     /**
@@ -382,6 +403,18 @@ class CatalogueFragment : BaseRxFragment<CataloguePresenter>(), FlexibleViewHold
             // Initialize mangas if going to grid view
             presenter.initializeMangas(adapter.items)
         }
+    }
+
+    /**
+     * Returns a preference for the number of manga per row based on the current orientation.
+     *
+     * @return the preference.
+     */
+    fun getColumnsPreferenceForCurrentOrientation(): Preference<Int> {
+        return if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT)
+            presenter.prefs.portraitColumns()
+        else
+            presenter.prefs.landscapeColumns()
     }
 
     /**
@@ -423,10 +456,10 @@ class CatalogueFragment : BaseRxFragment<CataloguePresenter>(), FlexibleViewHold
      * @return true if the item should be selected, false otherwise.
      */
     override fun onListItemClick(position: Int): Boolean {
-        val selectedManga = adapter.getItem(position)
+        val item = adapter.getItem(position) ?: return false
 
-        val intent = MangaActivity.newIntent(activity, selectedManga)
-        intent.putExtra(MangaActivity.MANGA_ONLINE, true)
+        val intent = MangaActivity.newIntent(activity, item)
+        intent.putExtra(MangaActivity.FROM_CATALOGUE, true)
         startActivity(intent)
         return false
     }

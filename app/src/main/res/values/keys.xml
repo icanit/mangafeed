@@ -2,18 +2,21 @@
 <resources>
     <string name="pref_category_general_key">pref_category_general_key</string>
     <string name="pref_category_reader_key">pref_category_reader_key</string>
-    <string name="pref_category_accounts_key">pref_category_accounts_key</string>
+    <string name="pref_category_sync_key">pref_category_sync_key</string>
     <string name="pref_category_downloads_key">pref_category_downloads_key</string>
     <string name="pref_category_advanced_key">pref_category_advanced_key</string>
     <string name="pref_category_about_key">pref_category_about_key</string>
+    <string name="pref_category_sources_key">pref_category_sources_key</string>
 
     <string name="pref_library_columns_dialog_key">pref_library_columns_dialog_key</string>
     <string name="pref_library_columns_portrait_key">pref_library_columns_portrait_key</string>
     <string name="pref_library_columns_landscape_key">pref_library_columns_landscape_key</string>
     <string name="pref_library_update_interval_key">pref_library_update_interval_key</string>
     <string name="pref_update_only_non_completed_key">pref_update_only_non_completed_key</string>
+    <string name="pref_update_only_when_charging_key">pref_update_only_when_charging_key</string>
     <string name="pref_auto_update_manga_sync_key">pref_auto_update_manga_sync_key</string>
     <string name="pref_ask_update_manga_sync_key">pref_ask_update_manga_sync_key</string>
+    <string name="pref_theme_key">pref_theme_key</string>
 
     <string name="pref_default_viewer_key">pref_default_viewer_key</string>
     <string name="pref_image_scale_type_key">pref_image_scale_type_key</string>
@@ -28,10 +31,22 @@
     <string name="pref_reader_theme_key">pref_reader_theme_key</string>
     <string name="pref_image_decoder_key">pref_image_decoder_key</string>
     <string name="pref_seamless_mode_key">pref_seamless_mode_key</string>
+    <string name="pref_read_with_volume_keys_key">reader_volume_keys</string>
+    <string name="pref_read_with_tapping_key">reader_tap</string>
+    <string name="pref_filter_downloaded_key">pref_filter_downloaded_key</string>
+    <string name="pref_filter_unread_key">pref_filter_unread_key</string>
 
     <string name="pref_download_directory_key">pref_download_directory_key</string>
     <string name="pref_download_slots_key">pref_download_slots_key</string>
     <string name="pref_download_only_over_wifi_key">pref_download_only_over_wifi_key</string>
+    <string name="pref_remove_after_marked_as_read_key">pref_remove_after_marked_as_read_key</string>
+    <string name="pref_category_remove_after_read_key">pref_category_remove_after_read_key</string>
+
+    <string name="pref_remove_after_read_key">pref_remove_after_read_key</string>
+    <string name="pref_remove_after_read_previous_key">pref_remove_after_read_previous_key</string>
+
+
+    <string name="pref_source_languages">pref_source_languages</string>
 
     <string name="pref_clear_chapter_cache_key">pref_clear_chapter_cache_key</string>
     <string name="pref_clear_database_key">pref_clear_database_key</string>
@@ -41,4 +56,8 @@
 
     <string name="pref_display_catalogue_as_list">pref_display_catalogue_as_list</string>
     <string name="pref_last_catalogue_source_key">pref_last_catalogue_source_key</string>
+
+    <!-- String Fonts -->
+    <string name="font_roboto_medium">sans-serif</string>
+    <string name="font_roboto_regular">sans-serif</string>
 </resources>

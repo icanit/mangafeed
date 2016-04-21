@@ -1,29 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <SwitchPreference android:title="@string/pref_hide_status_bar"
-        android:key="@string/pref_hide_status_bar_key"
-        android:defaultValue="true" />
-
-    <SwitchPreference android:title="@string/pref_enable_transitions"
-        android:key="@string/pref_enable_transitions_key"
-        android:defaultValue="true" />
-
-    <SwitchPreference android:title="@string/pref_show_page_number"
-        android:key="@string/pref_show_page_number_key"
-        android:defaultValue="true" />
-
-    <SwitchPreference android:title="@string/pref_custom_brightness"
-        android:key="@string/pref_custom_brightness_key"
-        android:defaultValue="false" />
-
-    <SwitchPreference android:title="@string/pref_keep_screen_on"
-        android:key="@string/pref_keep_screen_on_key"
-        android:defaultValue="true" />
-
-    <SwitchPreference android:title="@string/pref_seamless_mode"
-        android:key="@string/pref_seamless_mode_key"
-        android:defaultValue="true" />
+<android.support.v7.preference.PreferenceScreen
+    xmlns:android="http://schemas.android.com/apk/res/android">
 
     <eu.kanade.tachiyomi.widget.preference.IntListPreference
         android:title="@string/pref_viewer_type"
@@ -73,4 +50,49 @@
         android:defaultValue="0"
         android:summary="%s" />
 
-</PreferenceScreen>
+    <SwitchPreferenceCompat
+        android:title="@string/pref_hide_status_bar"
+        android:key="@string/pref_hide_status_bar_key"
+        android:defaultValue="true" />
+
+    <SwitchPreferenceCompat
+        android:title="@string/pref_enable_transitions"
+        android:key="@string/pref_enable_transitions_key"
+        android:defaultValue="true" />
+
+    <SwitchPreferenceCompat
+        android:title="@string/pref_show_page_number"
+        android:key="@string/pref_show_page_number_key"
+        android:defaultValue="true" />
+
+    <SwitchPreferenceCompat
+        android:title="@string/pref_custom_brightness"
+        android:key="@string/pref_custom_brightness_key"
+        android:defaultValue="false" />
+
+    <SwitchPreferenceCompat
+        android:title="@string/pref_keep_screen_on"
+        android:key="@string/pref_keep_screen_on_key"
+        android:defaultValue="true" />
+
+    <SwitchPreferenceCompat
+        android:title="@string/pref_seamless_mode"
+        android:key="@string/pref_seamless_mode_key"
+        android:defaultValue="true" />
+
+    <PreferenceCategory
+        android:title="@string/pref_reader_navigation">
+
+        <SwitchPreferenceCompat
+            android:title="@string/pref_read_with_tapping"
+            android:key="@string/pref_read_with_tapping_key"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            android:title="@string/pref_read_with_volume_keys"
+            android:key="@string/pref_read_with_volume_keys_key"
+            android:defaultValue="false" />
+
+    </PreferenceCategory>
+
+</android.support.v7.preference.PreferenceScreen>

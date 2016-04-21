@@ -3,31 +3,24 @@ package eu.kanade.tachiyomi.ui.library
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.support.design.widget.AppBarLayout
 import android.support.design.widget.TabLayout
 import android.support.v7.view.ActionMode
 import android.support.v7.widget.SearchView
 import android.view.*
-import butterknife.ButterKnife
 import com.afollestad.materialdialogs.MaterialDialog
 import eu.davidea.flexibleadapter.FlexibleAdapter
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.Category
 import eu.kanade.tachiyomi.data.database.models.Manga
-import eu.kanade.tachiyomi.data.io.downloadMediaAndReturnPath
 import eu.kanade.tachiyomi.data.library.LibraryUpdateService
-import eu.kanade.tachiyomi.event.LibraryMangasEvent
+import eu.kanade.tachiyomi.event.LibraryMangaEvent
 import eu.kanade.tachiyomi.ui.base.fragment.BaseRxFragment
 import eu.kanade.tachiyomi.ui.category.CategoryActivity
 import eu.kanade.tachiyomi.ui.main.MainActivity
-import eu.kanade.tachiyomi.util.ToastUtil
-import eu.kanade.tachiyomi.util.inflate
 import eu.kanade.tachiyomi.util.toast
+import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.fragment_library.*
 import nucleus.factory.RequiresPresenter
-import org.greenrobot.eventbus.EventBus
-import java.io.File
-import java.io.FileInputStream
 import java.io.IOException
 
 /**
@@ -46,12 +39,8 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
     /**
      * TabLayout of the categories.
      */
-    private lateinit var tabs: TabLayout
-
-    /**
-     * AppBarLayout from [MainActivity].
-     */
-    private lateinit var appBar: AppBarLayout
+    private val tabs: TabLayout
+        get() = (activity as MainActivity).tabs
 
     /**
      * Position of the active category.
@@ -73,6 +62,16 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
      * Selected manga for editing its cover.
      */
     private var selectedCoverManga: Manga? = null
+
+    /**
+     * Status of isFilterDownloaded
+     */
+    var isFilterDownloaded = false
+
+    /**
+     * Status of isFilterUnread
+     */
+    var isFilterUnread = false
 
     companion object {
         /**
@@ -101,9 +100,11 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
         }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun onCreate(savedState: Bundle?) {
+        super.onCreate(savedState)
         setHasOptionsMenu(true)
+        isFilterDownloaded = presenter.preferences.filterDownloaded().get() as Boolean
+        isFilterUnread = presenter.preferences.filterUnread().get() as Boolean
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedState: Bundle?): View? {
@@ -112,11 +113,6 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
 
     override fun onViewCreated(view: View, savedState: Bundle?) {
         setToolbarTitle(getString(R.string.label_library))
-        ButterKnife.bind(this, view)
-
-        appBar = (activity as MainActivity).appBar
-        tabs = appBar.inflate(R.layout.library_tab_layout) as TabLayout
-        appBar.addView(tabs)
 
         adapter = LibraryAdapter(childFragmentManager)
         view_pager.adapter = adapter
@@ -130,20 +126,22 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
     }
 
     override fun onDestroyView() {
-        appBar.removeView(tabs)
+        tabs.visibility = View.GONE
         super.onDestroyView()
     }
 
-    override fun onSaveInstanceState(bundle: Bundle) {
-        bundle.putInt(CATEGORY_KEY, view_pager.currentItem)
-        bundle.putString(QUERY_KEY, query)
-        super.onSaveInstanceState(bundle)
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt(CATEGORY_KEY, view_pager.currentItem)
+        outState.putString(QUERY_KEY, query)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         inflater.inflate(R.menu.library, menu)
 
         // Initialize search menu
+        val filterDownloadedItem = menu.findItem(R.id.action_filter_downloaded)
+        val filterUnreadItem = menu.findItem(R.id.action_filter_unread)
         val searchItem = menu.findItem(R.id.action_search)
         val searchView = searchItem.actionView as SearchView
 
@@ -152,6 +150,9 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
             searchView.setQuery(query, true)
             searchView.clearFocus()
         }
+
+        filterDownloadedItem.isChecked = isFilterDownloaded;
+        filterUnreadItem.isChecked = isFilterUnread;
 
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String): Boolean {
@@ -168,7 +169,33 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.action_refresh -> LibraryUpdateService.start(activity)
+            R.id.action_filter_unread -> {
+                // Change unread filter status.
+                isFilterUnread = !isFilterUnread
+                // Update settings.
+                presenter.preferences.filterUnread().set(isFilterUnread)
+                // Apply filter.
+                onFilterCheckboxChanged()
+            }
+            R.id.action_filter_downloaded -> {
+                // Change downloaded filter status.
+                isFilterDownloaded = !isFilterDownloaded
+                // Update settings.
+                presenter.preferences.filterDownloaded().set(isFilterDownloaded)
+                // Apply filter.
+                onFilterCheckboxChanged()
+            }
+            R.id.action_filter_empty -> {
+                // Remove filter status.
+                isFilterUnread = false
+                isFilterDownloaded = false
+                // Update settings.
+                presenter.preferences.filterUnread().set(isFilterUnread)
+                presenter.preferences.filterDownloaded().set(isFilterDownloaded)
+                // Apply filter
+                onFilterCheckboxChanged()
+            }
+            R.id.action_refresh -> LibraryUpdateService.start(activity, true) // Force refresh
             R.id.action_edit_categories -> {
                 val intent = CategoryActivity.newIntent(activity)
                 startActivity(intent)
@@ -180,6 +207,16 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
     }
 
     /**
+     * Applies filter change
+     */
+    private fun onFilterCheckboxChanged() {
+        presenter.updateLibrary()
+        adapter.notifyDataSetChanged()
+        adapter.refreshRegisteredAdapters()
+        activity.supportInvalidateOptionsMenu();
+    }
+
+    /**
      * Updates the query.
      *
      * @param query the new value of the query.
@@ -188,7 +225,9 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
         this.query = query
 
         // Notify the subject the query has changed.
-        presenter.searchSubject.onNext(query)
+        if (isResumed) {
+            presenter.searchSubject.onNext(query)
+        }
     }
 
     /**
@@ -198,6 +237,10 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
      * @param mangaMap a map containing the manga for each category.
      */
     fun onNextLibraryUpdate(categories: List<Category>, mangaMap: Map<Int, List<Manga>>) {
+        // Check if library is empty and update information accordingly.
+        (activity as MainActivity).updateEmptyView(mangaMap.isEmpty(),
+                R.string.information_empty_library, R.drawable.ic_book_black_128dp)
+
         // Get the current active category.
         val activeCat = if (adapter.categories != null) view_pager.currentItem else activeCategory
 
@@ -211,11 +254,15 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
         // Restore active category.
         view_pager.setCurrentItem(activeCat, false)
         if (tabs.tabCount > 0) {
+            // Prevent IndexOutOfBoundsException
+            if (tabs.tabCount <= view_pager.currentItem) {
+                view_pager.currentItem = (tabs.tabCount - 1)
+            }
             tabs.getTabAt(view_pager.currentItem)?.select()
         }
 
         // Send the manga map to child fragments after the adapter is updated.
-        EventBus.getDefault().postSticky(LibraryMangasEvent(mangaMap))
+        presenter.libraryMangaSubject.onNext(LibraryMangaEvent(mangaMap))
     }
 
     /**
@@ -303,7 +350,7 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
                 startActivityForResult(Intent.createChooser(intent,
                         getString(R.string.file_select_cover)), REQUEST_IMAGE_OPEN)
             } else {
-                ToastUtil.showShort(context, R.string.notification_first_add_to_library)
+                context.toast(R.string.notification_first_add_to_library)
             }
 
         }
@@ -315,21 +362,14 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
 
                 try {
                     // Get the file's input stream from the incoming Intent
-                    val inputStream = context.contentResolver.openInputStream(data.data)
-
-                    // Convert to absolute path to prevent FileNotFoundException
-                    val result = downloadMediaAndReturnPath(inputStream as FileInputStream, context)
-
-                    // Get file from filepath
-                    val picture = File(result)
-
-                    // Update cover to selected file, show error if something went wrong
-                    if (presenter.editCoverWithLocalFile(picture, manga)) {
-                        adapter.refreshRegisteredAdapters()
-                    } else {
-                        context.toast(R.string.notification_manga_update_failed)
+                    context.contentResolver.openInputStream(data.data).use {
+                        // Update cover to selected file, show error if something went wrong
+                        if (presenter.editCoverWithStream(it, manga)) {
+                            adapter.refreshRegisteredAdapters()
+                        } else {
+                            context.toast(R.string.notification_manga_update_failed)
+                        }
                     }
-
                 } catch (e: IOException) {
                     context.toast(R.string.notification_manga_update_failed)
                     e.printStackTrace()
@@ -345,16 +385,21 @@ class LibraryFragment : BaseRxFragment<LibraryPresenter>(), ActionMode.Callback 
      * @param mangas the manga list to move.
      */
     private fun moveMangasToCategories(mangas: List<Manga>) {
+        val categories = presenter.categories
+        val commonCategoriesIndexes = presenter.getCommonCategories(mangas)
+                .map { categories.indexOf(it) }
+                .toTypedArray()
+
         MaterialDialog.Builder(activity)
                 .title(R.string.action_move_category)
-                .items(presenter.getCategoryNames())
-                .itemsCallbackMultiChoice(null) { dialog, positions, text ->
+                .items(categories.map { it.name })
+                .itemsCallbackMultiChoice(commonCategoriesIndexes) { dialog, positions, text ->
                     presenter.moveMangasToCategories(positions, mangas)
                     destroyActionModeIfNeeded()
                     true
                 }
-                .positiveText(R.string.button_ok)
-                .negativeText(R.string.button_cancel)
+                .positiveText(android.R.string.ok)
+                .negativeText(android.R.string.cancel)
                 .show()
     }
 

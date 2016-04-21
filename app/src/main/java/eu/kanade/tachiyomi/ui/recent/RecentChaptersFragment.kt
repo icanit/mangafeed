@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.ui.recent
 
 import android.os.Bundle
-import android.support.v4.content.ContextCompat
-import android.support.v7.widget.LinearLayoutManager
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -15,7 +13,10 @@ import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.ui.base.adapter.FlexibleViewHolder
 import eu.kanade.tachiyomi.ui.base.decoration.DividerItemDecoration
 import eu.kanade.tachiyomi.ui.base.fragment.BaseRxFragment
+import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.util.getResourceDrawable
+import eu.kanade.tachiyomi.widget.NpaLinearLayoutManager
 import kotlinx.android.synthetic.main.fragment_recent_chapters.*
 import nucleus.factory.RequiresPresenter
 import rx.Observable
@@ -66,9 +67,8 @@ class RecentChaptersFragment : BaseRxFragment<RecentChaptersPresenter>(), Flexib
      */
     override fun onViewCreated(view: View?, savedInstanceState: Bundle?) {
         // Init RecyclerView and adapter
-        recycler.layoutManager = LinearLayoutManager(activity)
-        recycler.addItemDecoration(DividerItemDecoration(ContextCompat.getDrawable(
-                context, R.drawable.line_divider)))
+        recycler.layoutManager = NpaLinearLayoutManager(activity)
+        recycler.addItemDecoration(DividerItemDecoration(context.theme.getResourceDrawable(R.attr.divider_drawable)))
         recycler.setHasFixedSize(true)
         adapter = RecentChaptersAdapter(this)
         recycler.adapter = adapter
@@ -121,6 +121,9 @@ class RecentChaptersFragment : BaseRxFragment<RecentChaptersPresenter>(), Flexib
      * @param chapters list of chapters
      */
     fun onNextMangaChapters(chapters: List<Any>) {
+        (activity as MainActivity).updateEmptyView(chapters.isEmpty(),
+                R.string.information_no_recent, R.drawable.ic_history_black_128dp)
+
         adapter.setItems(chapters)
     }
 
@@ -199,9 +202,9 @@ class RecentChaptersFragment : BaseRxFragment<RecentChaptersPresenter>(), Flexib
      * @param chapters selected chapter
      * @return true
      */
-    fun onMarkAsRead(chapters: Observable<Chapter>): Boolean {
+    fun onMarkAsRead(chapters: Observable<Chapter>, manga : Manga): Boolean {
         // Set marked as read
-        presenter.markChaptersRead(chapters, true)
+        presenter.markChaptersRead(chapters, manga, true)
         return true
     }
 
@@ -211,9 +214,9 @@ class RecentChaptersFragment : BaseRxFragment<RecentChaptersPresenter>(), Flexib
      * @param chapters selected chapter
      * @return true
      */
-    fun onMarkAsUnread(chapters: Observable<Chapter>): Boolean {
+    fun onMarkAsUnread(chapters: Observable<Chapter> , manga : Manga): Boolean {
         // Set marked as unread
-        presenter.markChaptersRead(chapters, false)
+        presenter.markChaptersRead(chapters, manga, false)
         return true
     }
 

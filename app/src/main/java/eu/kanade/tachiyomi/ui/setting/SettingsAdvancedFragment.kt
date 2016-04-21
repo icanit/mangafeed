@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.ui.setting
 
 import android.os.Bundle
-import android.preference.Preference
+import android.support.v7.preference.Preference
 import android.view.View
 import com.afollestad.materialdialogs.MaterialDialog
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.database.DatabaseHelper
-import eu.kanade.tachiyomi.util.ToastUtil
+import eu.kanade.tachiyomi.util.toast
 import rx.Observable
 import rx.Subscription
 import rx.android.schedulers.AndroidSchedulers
@@ -74,10 +74,10 @@ class SettingsAdvancedFragment : SettingsNestedFragment() {
                     dialog.incrementProgress(1)
                 }, {
                     dialog.dismiss()
-                    ToastUtil.showShort(activity, getString(R.string.cache_delete_error))
+                    activity.toast(R.string.cache_delete_error)
                 }, {
                     dialog.dismiss()
-                    ToastUtil.showShort(activity, getString(R.string.cache_deleted, deletedFiles.get()))
+                    activity.toast(getString(R.string.cache_deleted, deletedFiles.get()))
                     preference.summary = getString(R.string.used_cache, chapterCache.readableSize)
                 })
     }
@@ -85,8 +85,8 @@ class SettingsAdvancedFragment : SettingsNestedFragment() {
     private fun clearDatabase() {
         MaterialDialog.Builder(activity)
                 .content(R.string.clear_database_confirmation)
-                .positiveText(R.string.button_yes)
-                .negativeText(R.string.button_no)
+                .positiveText(android.R.string.yes)
+                .negativeText(android.R.string.no)
                 .onPositive { dialog, which -> db.deleteMangasNotInLibrary().executeAsBlocking() }
                 .show()
     }

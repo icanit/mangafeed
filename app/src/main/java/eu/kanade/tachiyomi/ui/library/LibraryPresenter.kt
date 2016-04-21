@@ -7,16 +7,17 @@ import eu.kanade.tachiyomi.data.database.DatabaseHelper
 import eu.kanade.tachiyomi.data.database.models.Category
 import eu.kanade.tachiyomi.data.database.models.Manga
 import eu.kanade.tachiyomi.data.database.models.MangaCategory
+import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.preference.PreferencesHelper
+import eu.kanade.tachiyomi.data.preference.getOrDefault
 import eu.kanade.tachiyomi.data.source.SourceManager
-import eu.kanade.tachiyomi.event.LibraryMangasEvent
+import eu.kanade.tachiyomi.event.LibraryMangaEvent
 import eu.kanade.tachiyomi.ui.base.presenter.BasePresenter
-import org.greenrobot.eventbus.EventBus
 import rx.Observable
 import rx.android.schedulers.AndroidSchedulers
 import rx.subjects.BehaviorSubject
-import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.util.*
 import javax.inject.Inject
 
@@ -33,12 +34,17 @@ class LibraryPresenter : BasePresenter<LibraryFragment>() {
     /**
      * Currently selected manga.
      */
-    lateinit var selectedMangas: MutableList<Manga>
+    var selectedMangas = mutableListOf<Manga>()
 
     /**
      * Search query of the library.
      */
-    lateinit var searchSubject: BehaviorSubject<String>
+    val searchSubject = BehaviorSubject.create<String>()
+
+    /**
+     * Subject to notify the library's viewpager for updates.
+     */
+    val libraryMangaSubject = BehaviorSubject.create<LibraryMangaEvent?>()
 
     /**
      * Database.
@@ -60,6 +66,11 @@ class LibraryPresenter : BasePresenter<LibraryFragment>() {
      */
     @Inject lateinit var sourceManager: SourceManager
 
+    /**
+     * Download manager.
+     */
+    @Inject lateinit var downloadManager: DownloadManager
+
     companion object {
         /**
          * Id of the restartable that listens for library updates.
@@ -69,10 +80,6 @@ class LibraryPresenter : BasePresenter<LibraryFragment>() {
 
     override fun onCreate(savedState: Bundle?) {
         super.onCreate(savedState)
-
-        selectedMangas = ArrayList()
-
-        searchSubject = BehaviorSubject.create()
 
         restartableLatestCache(GET_LIBRARY,
                 { getLibraryObservable() },
@@ -85,7 +92,7 @@ class LibraryPresenter : BasePresenter<LibraryFragment>() {
     }
 
     override fun onDropView() {
-        EventBus.getDefault().removeStickyEvent(LibraryMangasEvent::class.java)
+        libraryMangaSubject.onNext(null)
         super.onDropView()
     }
 
@@ -108,12 +115,19 @@ class LibraryPresenter : BasePresenter<LibraryFragment>() {
     }
 
     /**
+     * Update the library information
+     */
+    fun updateLibrary() {
+        start(GET_LIBRARY)
+    }
+
+    /**
      * Get the categories from the database.
      *
      * @return an observable of the categories.
      */
     fun getCategoriesObservable(): Observable<List<Category>> {
-        return db.categories.asRxObservable()
+        return db.getCategories().asRxObservable()
                 .doOnNext { categories -> this.categories = categories }
     }
 
@@ -124,12 +138,63 @@ class LibraryPresenter : BasePresenter<LibraryFragment>() {
      * value.
      */
     fun getLibraryMangasObservable(): Observable<Map<Int, List<Manga>>> {
-        return db.libraryMangas.asRxObservable()
-                .flatMap { mangas -> Observable.from(mangas)
-                        .groupBy { it.category }
-                        .flatMap { group -> group.toList().map { Pair(group.key, it) } }
-                        .toMap({ it.first }, { it.second })
+        return db.getLibraryMangas().asRxObservable()
+                .flatMap { mangas ->
+                    Observable.from(mangas)
+                            .filter {
+                                // Filter library by options
+                                filterLibrary(it)
+                            }
+                            .groupBy { it.category }
+                            .flatMap { group -> group.toList().map { Pair(group.key, it) } }
+                            .toMap({ it.first }, { it.second })
                 }
+    }
+
+    /**
+     * Filter library by preference
+     *
+     * @param manga from library
+     * @return filter status
+     */
+    fun filterLibrary(manga: Manga): Boolean {
+        val prefFilterDownloaded = preferences.filterDownloaded().getOrDefault()
+        val prefFilterUnread = preferences.filterUnread().getOrDefault()
+
+        // Check if filter option is selected
+        if (prefFilterDownloaded || prefFilterUnread) {
+
+            // Does it have downloaded chapters.
+            var hasDownloaded = false
+            var hasUnread = false
+
+            if (prefFilterUnread) {
+                // Does it have unread chapters.
+                hasUnread = manga.unread > 0
+            }
+
+            if (prefFilterDownloaded) {
+                val mangaDir = downloadManager.getAbsoluteMangaDirectory(sourceManager.get(manga.source)!!, manga)
+
+                if (mangaDir.exists()) {
+                    for (file in mangaDir.listFiles()) {
+                        if (file.isDirectory && file.listFiles().isNotEmpty()) {
+                            hasDownloaded = true
+                            break
+                        }
+                    }
+                }
+            }
+
+            // Return correct filter status
+            if (prefFilterDownloaded && prefFilterUnread) {
+                return (hasDownloaded && hasUnread)
+            } else {
+                return (hasDownloaded || hasUnread)
+            }
+        } else {
+            return true
+        }
     }
 
     /**
@@ -155,11 +220,13 @@ class LibraryPresenter : BasePresenter<LibraryFragment>() {
     }
 
     /**
-     * Get the category names as a list.
+     * Returns the common categories for the given list of manga.
+     *
+     * @param mangas the list of manga.
      */
-    fun getCategoryNames(): List<String> {
-        return categories.map { it.name }
-    }
+    fun getCommonCategories(mangas: List<Manga>) = mangas.toSet()
+            .map { db.getCategoriesForManga(it).executeAsBlocking() }
+            .reduce { set1: Iterable<Category>, set2 -> set1.intersect(set2) }
 
     /**
      * Remove the selected manga from the library.
@@ -208,17 +275,14 @@ class LibraryPresenter : BasePresenter<LibraryFragment>() {
     /**
      * Update cover with local file.
      *
-     * @param file the new cover.
+     * @param inputStream the new cover.
      * @param manga the manga edited.
      * @return true if the cover is updated, false otherwise
      */
     @Throws(IOException::class)
-    fun editCoverWithLocalFile(file: File, manga: Manga): Boolean {
-        if (!manga.initialized)
-            return false
-
-        if (manga.favorite) {
-            coverCache.copyToLocalCache(manga.thumbnail_url, file)
+    fun editCoverWithStream(inputStream: InputStream, manga: Manga): Boolean {
+        if (manga.thumbnail_url != null && manga.favorite) {
+            coverCache.copyToCache(manga.thumbnail_url, inputStream)
             return true
         }
         return false

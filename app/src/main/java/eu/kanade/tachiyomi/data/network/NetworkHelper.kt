@@ -10,10 +10,13 @@ import java.net.CookieStore
 
 class NetworkHelper(context: Context) {
 
-    private val client: OkHttpClient
-    private val forceCacheClient: OkHttpClient
+    private val cacheDir = File(context.cacheDir, "network_cache")
 
-    private val cookieManager: CookieManager
+    private val cacheSize = 5L * 1024 * 1024 // 5 MiB
+
+    private val cookieManager = CookieManager().apply {
+        setCookiePolicy(CookiePolicy.ACCEPT_ALL)
+    }
 
     private val forceCacheInterceptor = { chain: Interceptor.Chain ->
         val originalResponse = chain.proceed(chain.request())
@@ -23,56 +26,51 @@ class NetworkHelper(context: Context) {
                 .build()
     }
 
-    private val cacheSize = 5L * 1024 * 1024 // 5 MiB
-    private val cacheDir = "network_cache"
+    private val client = OkHttpClient.Builder()
+            .cookieJar(JavaNetCookieJar(cookieManager))
+            .cache(Cache(cacheDir, cacheSize))
+            .build()
 
-    init {
-        val cacheDir = File(context.cacheDir, cacheDir)
+    private val forceCacheClient = client.newBuilder()
+            .addNetworkInterceptor(forceCacheInterceptor)
+            .build()
 
-        cookieManager = CookieManager()
-        cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL)
-
-        client = OkHttpClient.Builder()
-                .cookieJar(JavaNetCookieJar(cookieManager))
-                .cache(Cache(cacheDir, cacheSize))
-                .build()
-
-        forceCacheClient = client.newBuilder()
-                .addNetworkInterceptor(forceCacheInterceptor)
-                .build()
-    }
+    val cookies: CookieStore
+        get() = cookieManager.cookieStore
 
     @JvmOverloads
     fun request(request: Request, forceCache: Boolean = false): Observable<Response> {
         return Observable.fromCallable {
             val c = if (forceCache) forceCacheClient else client
-            c.newCall(request).execute()
+            c.newCall(request).execute().apply { body().close() }
         }
     }
 
     @JvmOverloads
     fun requestBody(request: Request, forceCache: Boolean = false): Observable<String> {
-        return request(request, forceCache)
-                .map { it.body().string() }
+        return Observable.fromCallable {
+            val c = if (forceCache) forceCacheClient else client
+            c.newCall(request).execute().body().string()
+        }
     }
 
     fun requestBodyProgress(request: Request, listener: ProgressListener): Observable<Response> {
-        return Observable.fromCallable {
-            val progressClient = client.newBuilder()
-                    .cache(null)
-                    .addNetworkInterceptor { chain ->
-                        val originalResponse = chain.proceed(chain.request())
-                        originalResponse.newBuilder()
-                                .body(ProgressResponseBody(originalResponse.body(), listener))
-                                .build()
-                    }
-                    .build()
-
-            progressClient.newCall(request).execute()
-        }.retry(1)
+        return Observable.fromCallable { requestBodyProgressBlocking(request, listener) }
     }
 
-    val cookies: CookieStore
-        get() = cookieManager.cookieStore
+    fun requestBodyProgressBlocking(request: Request, listener: ProgressListener): Response {
+        val progressClient = client.newBuilder()
+                .cache(null)
+                .addNetworkInterceptor { chain ->
+                    val originalResponse = chain.proceed(chain.request())
+                    originalResponse.newBuilder()
+                            .body(ProgressResponseBody(originalResponse.body(), listener))
+                            .build()
+                }
+                .build()
+
+        return progressClient.newCall(request).execute()
+    }
+
 
 }

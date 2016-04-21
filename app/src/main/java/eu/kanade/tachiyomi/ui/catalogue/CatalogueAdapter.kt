@@ -1,10 +1,14 @@
 package eu.kanade.tachiyomi.ui.catalogue
 
 import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.widget.RelativeLayout
 import eu.davidea.flexibleadapter.FlexibleAdapter
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.Manga
 import eu.kanade.tachiyomi.util.inflate
+import kotlinx.android.synthetic.main.fragment_catalogue.*
+import kotlinx.android.synthetic.main.item_catalogue_grid.view.*
 import java.util.*
 
 /**
@@ -12,7 +16,7 @@ import java.util.*
  *
  * @param fragment the fragment containing this adapter.
  */
-class CatalogueAdapter(private val fragment: CatalogueFragment) : FlexibleAdapter<CatalogueHolder, Manga>() {
+class CatalogueAdapter(val fragment: CatalogueFragment) : FlexibleAdapter<CatalogueHolder, Manga>() {
 
     /**
      * Property to get the list of manga in the adapter.
@@ -68,6 +72,7 @@ class CatalogueAdapter(private val fragment: CatalogueFragment) : FlexibleAdapte
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CatalogueHolder {
         if (parent.id == R.id.catalogue_grid) {
             val v = parent.inflate(R.layout.item_catalogue_grid)
+            v.image_container.layoutParams = RelativeLayout.LayoutParams(MATCH_PARENT, coverHeight)
             return CatalogueGridHolder(v, this, fragment)
         } else {
             val v = parent.inflate(R.layout.item_catalogue_list)
@@ -83,7 +88,13 @@ class CatalogueAdapter(private val fragment: CatalogueFragment) : FlexibleAdapte
      */
     override fun onBindViewHolder(holder: CatalogueHolder, position: Int) {
         val manga = getItem(position)
-        holder.onSetValues(manga, fragment.presenter)
+        holder.onSetValues(manga)
     }
+
+    /**
+     * Property to return the height for the covers based on the width to keep an aspect ratio.
+     */
+    val coverHeight: Int
+        get() = fragment.catalogue_grid.itemWidth / 3 * 4
 
 }

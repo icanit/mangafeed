@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
+<android.support.v7.preference.PreferenceScreen
+    xmlns:android="http://schemas.android.com/apk/res/android" >
 
     <Preference
         android:key="@string/pref_category_general_key"
@@ -15,11 +16,16 @@
         android:key="@string/pref_category_downloads_key"
         android:persistent="false"
         android:title="@string/pref_category_downloads" />
+
+    <Preference
+        android:key="@string/pref_category_sources_key"
+        android:persistent="false"
+        android:title="@string/pref_category_sources" />
     
     <Preference
-        android:key="@string/pref_category_accounts_key"
+        android:key="@string/pref_category_sync_key"
         android:persistent="false"
-        android:title="@string/pref_category_accounts" />
+        android:title="@string/pref_category_sync" />
 
     <Preference
         android:key="@string/pref_category_advanced_key"
@@ -31,4 +37,4 @@
         android:persistent="false"
         android:title="@string/pref_category_about" />
 
-</PreferenceScreen>
+</android.support.v7.preference.PreferenceScreen>
